@@ -1,0 +1,7 @@
+[workspace.package]
+rust-version = "1.75.0"
+
+[workspace]
+members = [
+  "components/telegram"
+]
