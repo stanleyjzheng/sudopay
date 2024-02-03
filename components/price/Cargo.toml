@@ -1,5 +1,5 @@
 [package]
-name = "transaction"
+name = "price"
 version = "0.1.0"
 edition = "2021"
 rust-version.workspace = true
@@ -8,6 +8,11 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-dotenv = { workspace = true }
-ethers = { workspace = true }
+once_cell = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
 tokio = { workspace = true }
+log = { workspace = true }
+config = { path = "../config" }

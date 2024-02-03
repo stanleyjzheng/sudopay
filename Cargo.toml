@@ -2,15 +2,32 @@
 rust-version = "1.75.0"
 
 [workspace]
-members = ["components/telegram", "components/transaction"]
+members = [
+    "components/config",
+    "components/price",
+    "components/telegram",
+    "components/transaction",
+]
 
 [workspace.dependencies]
-ethers = { git = "https://github.com/gakonst/ethers-rs.git", rev = "88095ba" }
-tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
-log = "0.4"
-pretty_env_logger = "0.5"
 anyhow = "1.0.75"
 dotenv = "0.15.0"
+ethers = { git = "https://github.com/gakonst/ethers-rs.git", rev = "88095ba" }
+log = "0.4"
+once_cell = "1.19.0"
+pretty_env_logger = "0.5"
+reqwest = { version = "0.11", features = ["json"] }
+sqlx = { version = "0.7", features = [
+    "runtime-tokio-native-tls",
+    "postgres",
+    "chrono",
+    "macros",
+    "json",
+    "bigdecimal",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
 
 [profile.dev]
 split-debuginfo = "unpacked"

@@ -6,6 +6,7 @@ use deposit::{
     receive_deposit_coin_by_address, receive_deposit_coin_by_amount, receive_deposit_type,
 };
 use dotenv::dotenv;
+use log::info;
 use std::env;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
@@ -18,7 +19,7 @@ use types::{Command, MyDialogue, State};
 async fn main() {
     dotenv().ok();
     pretty_env_logger::init();
-    log::info!("Starting purchase bot...");
+    info!("Starting purchase bot...");
 
     let teloxide_token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN");
     let bot = Bot::new(teloxide_token);
