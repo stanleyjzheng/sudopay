@@ -1,15 +1,13 @@
 [package]
-name = "telegram"
+name = "transaction"
 version = "0.1.0"
 edition = "2021"
+rust-version.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-teloxide = { version = "0.12", features = ["macros"] }
-log = { workspace = true }
-pretty_env_logger = { workspace = true }
-tokio = { workspace = true }
 anyhow = { workspace = true }
 ethers = { workspace = true }
+tokio = { workspace = true }
 dotenv = { workspace = true }

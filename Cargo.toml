@@ -2,6 +2,16 @@
 rust-version = "1.75.0"
 
 [workspace]
-members = [
-  "components/telegram"
-]
+members = ["components/telegram", "components/transaction"]
+
+[workspace.dependencies]
+ethers = { git = "https://github.com/gakonst/ethers-rs.git", rev = "88095ba" }
+tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
+log = "0.4"
+pretty_env_logger = "0.5"
+anyhow = "1.0.75"
+dotenv = "0.15.0"
+
+[profile.dev]
+split-debuginfo = "unpacked"
+debug = "limited"
