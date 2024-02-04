@@ -99,7 +99,7 @@ impl PriceClient {
         Ok(())
     }
 
-    pub async fn get_price(&self, asset: Asset) -> anyhow::Result<f64> {
+    pub async fn get_cached_price(&self, asset: Asset) -> anyhow::Result<f64> {
         let record = sqlx::query!(
             "SELECT price FROM prices WHERE ticker = $1",
             serde_json::to_string(&asset)?

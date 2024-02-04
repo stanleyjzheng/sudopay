@@ -1,8 +1,10 @@
+rust_log := env_var_or_default("RUST_LOG", "debug")
+
 compose:
   sh ./scripts/compose.sh
 migrate:
   sqlx migrate run
 dev-telegram:
-  cargo watch -x 'cargo run --bin telegram'
+  RUST_LOG={{ rust_log }} cargo watch -x 'cargo run --bin telegram'
 update-prices:
-  cargo run --bin price
+  RUST_LOG={{ rust_log }} cargo run --bin price

@@ -2611,6 +2611,7 @@ dependencies = [
  "config",
  "log",
  "once_cell",
+ "pretty_env_logger",
  "reqwest",
  "serde",
  "serde_json",
@@ -3765,6 +3766,7 @@ dependencies = [
  "ethers",
  "log",
  "pretty_env_logger",
+ "price",
  "teloxide",
  "tokio",
 ]

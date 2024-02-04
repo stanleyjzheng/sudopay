@@ -16,3 +16,4 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 config = { path = "../config" }
+pretty_env_logger = { workspace = true }

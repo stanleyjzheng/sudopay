@@ -10,5 +10,6 @@ dotenv = { workspace = true }
 ethers = { workspace = true }
 log = { workspace = true }
 pretty_env_logger = { workspace = true }
+price = { path = '../price' }
 teloxide = { version = "0.12", features = ["macros"] }
 tokio = { workspace = true }

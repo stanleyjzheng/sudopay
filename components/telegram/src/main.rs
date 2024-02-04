@@ -7,6 +7,7 @@ use deposit::{
 };
 use dotenv::dotenv;
 use log::info;
+use price::{Asset, PriceClient};
 use std::env;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
@@ -67,8 +68,9 @@ fn schema() -> UpdateHandler<anyhow::Error> {
 }
 
 async fn start(bot: Bot, _dialogue: MyDialogue, msg: Message) -> anyhow::Result<()> {
-    // TODO: Fetch eth price
-    let eth_price = 2197;
+    let price_client = PriceClient::new(None).await?;
+
+    let eth_price = price_client.get_cached_price(Asset::Eth).await?;
     // TODO: Fetch USDB balance
     let usdb_balance = 1000;
     // TODO: Fetch ETH balance
