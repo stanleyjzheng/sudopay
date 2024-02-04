@@ -3762,11 +3762,12 @@ name = "telegram"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dotenv",
+ "config",
  "ethers",
  "log",
  "pretty_env_logger",
  "price",
+ "sqlx",
  "teloxide",
  "tokio",
 ]

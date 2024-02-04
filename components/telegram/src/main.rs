@@ -1,32 +1,37 @@
 mod deposit;
 mod types;
 
+use std::sync::Arc;
+
+use config::Config;
 use deposit::{
     click_deposit_address_or_deposit_amount, receive_deposit_address, receive_deposit_amount,
     receive_deposit_coin_by_address, receive_deposit_coin_by_amount, receive_deposit_type,
 };
-use dotenv::dotenv;
 use log::info;
 use price::{Asset, PriceClient};
-use std::env;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
     utils::command::BotCommands,
 };
+use tokio::sync::Mutex;
 use types::{Command, MyDialogue, State};
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
     pretty_env_logger::init();
-    info!("Starting purchase bot...");
+    info!("Starting bot...");
 
-    let teloxide_token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN");
-    let bot = Bot::new(teloxide_token);
+    let config = Config::new_from_env();
+    let bot = Bot::new(config.teloxide_token.clone());
+
+    let price_client = Arc::new(Mutex::new(
+        PriceClient::new(Some(config), None).await.unwrap(),
+    ));
 
     Dispatcher::builder(bot, schema())
-        .dependencies(dptree::deps![InMemStorage::<State>::new()])
+        .dependencies(dptree::deps![price_client, InMemStorage::<State>::new()])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -67,8 +72,13 @@ fn schema() -> UpdateHandler<anyhow::Error> {
         .branch(callback_query_handler)
 }
 
-async fn start(bot: Bot, _dialogue: MyDialogue, msg: Message) -> anyhow::Result<()> {
-    let price_client = PriceClient::new(None).await?;
+async fn start(
+    bot: Bot,
+    _dialogue: MyDialogue,
+    msg: Message,
+    price_client: Arc<Mutex<PriceClient>>,
+) -> anyhow::Result<()> {
+    let price_client = price_client.lock().await;
 
     let eth_price = price_client.get_cached_price(Asset::Eth).await?;
     // TODO: Fetch USDB balance

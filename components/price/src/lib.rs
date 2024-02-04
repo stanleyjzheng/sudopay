@@ -33,9 +33,9 @@ pub struct PriceClient {
 }
 
 impl PriceClient {
-    pub async fn new(config: Option<Config>) -> anyhow::Result<Self> {
+    pub async fn new(config: Option<Config>, db_pool: Option<PgPool>) -> anyhow::Result<Self> {
         let config = config.unwrap_or(Config::new_from_env());
-        let db_pool = PgPool::connect(&config.database_url).await?;
+        let db_pool = db_pool.unwrap_or(PgPool::connect(&config.database_url).await?);
 
         Ok(Self {
             client: reqwest::Client::new(),
