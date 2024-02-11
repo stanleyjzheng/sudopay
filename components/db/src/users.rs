@@ -1,6 +1,4 @@
-// create a new user without password if the password is empty
-// get the hash if it exists
-// check it against user's password
+use anyhow::anyhow;
 use bcrypt::{hash, verify};
 use ethers::signers::{
     coins_bip39::{English, Mnemonic},
@@ -45,7 +43,10 @@ impl User {
         Ok(user)
     }
 
-    pub async fn get_user(conn: &mut PgConnection, telegram_id: i64) -> anyhow::Result<User> {
+    pub async fn get_user(
+        conn: &mut PgConnection,
+        telegram_id: i64,
+    ) -> anyhow::Result<Option<User>> {
         let user = query_as!(
             User,
             "
@@ -55,7 +56,7 @@ impl User {
             ",
             telegram_id
         )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?;
 
         Ok(user)
@@ -70,12 +71,21 @@ impl User {
             "SELECT salted_password FROM users WHERE telegram_id = $1",
             self.telegram_id
         )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?;
 
-        let verify = verify(submitted_password, &row.salted_password.unwrap_or_default())?;
-
-        Ok(verify)
+        match row {
+            Some(row_data) => match row_data.salted_password {
+                Some(salted_password) => {
+                    let verify = verify(submitted_password, &salted_password)?;
+                    Ok(verify)
+                }
+                // No password set, but user exists
+                None => Ok(true),
+            },
+            // User does not exist
+            None => Err(anyhow!("User not found")),
+        }
     }
 
     pub async fn set_password(
