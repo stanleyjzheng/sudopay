@@ -1,6 +1,3 @@
-use std::str::FromStr;
-
-use anyhow::anyhow;
 use ethers::types::H160;
 use teloxide::{
     dispatching::dialogue::{Dialogue, InMemStorage},
@@ -55,24 +52,6 @@ pub enum Command {
     ListDeposits,
     /// List all withdrawals
     ListWithdrawals,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum SudoPayAsset {
-    Usdb,
-    Eth,
-}
-
-impl FromStr for SudoPayAsset {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "USDB" => Ok(SudoPayAsset::Usdb),
-            "ETH" => Ok(SudoPayAsset::Eth),
-            _ => Err(anyhow!("Invalid SudoPayAsset")),
-        }
-    }
 }
 
 pub type MyDialogue = Dialogue<State, InMemStorage<State>>;

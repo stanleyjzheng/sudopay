@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Wallet balances
 CREATE TABLE IF NOT EXISTS balances (
-  public_key TEXT PRIMARY KEY NOT NULL,
+  seed_phrase_public_key TEXT PRIMARY KEY NOT NULL,
   usdb_balance double precision NOT NULL DEFAULT 0,
   eth_balance double precision NOT NULL DEFAULT 0,
   accrued_yield_balance double precision NOT NULL DEFAULT 0
@@ -20,20 +20,38 @@ CREATE TABLE IF NOT EXISTS balances (
 
 -- Internal transactions
 CREATE TABLE IF NOT EXISTS transactions (
-  id SERIAL PRIMARY KEY NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
   from_public_key TEXT NOT NULL,
   to_public_key TEXT NOT NULL,
   amount double precision NOT NULL,
+  matched_deposit_request_id INTEGER DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Withdrawals
 
--- Address deposits
+-- Deposit requests
+CREATE TABLE IF NOT EXISTS deposit_requests (
+  id SERIAL PRIMARY KEY NOT NULL,
+  telegram_id BIGINT NOT NULL,
+  depositor_public_key TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  amount double precision DEFAULT NULL,
+  from_address TEXT DEFAULT NULL,
+  matched_transaction_id TEXT DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
--- Balance deposits
-
--- 
+-- Deposits
+CREATE TABLE IF NOT EXISTS deposits (
+  transaction_id TEXT PRIMARY KEY NOT NULL,
+  transaction_from_public_key TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  matched BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Prices
 CREATE TABLE IF NOT EXISTS prices (
@@ -50,6 +68,20 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Deposit requests table trigger
+DROP TRIGGER IF EXISTS deposit_requests_updated_modified_trigger ON deposit_requests;
+CREATE TRIGGER deposit_requests_updated_modified_trigger
+BEFORE UPDATE ON deposit_requests
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_updated_timestamp();
+
+-- Deposits table trigger
+DROP TRIGGER IF EXISTS deposits_updated_modified_trigger ON deposits;
+CREATE TRIGGER deposits_updated_modified_trigger
+BEFORE UPDATE ON deposits
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_updated_timestamp();
 
 -- Users table trigger
 DROP TRIGGER IF EXISTS users_updated_modified_trigger ON users;

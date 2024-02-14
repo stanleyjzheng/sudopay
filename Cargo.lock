@@ -488,6 +488,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "ethers",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
 name = "config"
 version = "0.1.0"
 dependencies = [
@@ -692,8 +705,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcrypt",
+ "chrono",
+ "common",
  "ethers",
+ "log",
+ "pretty_env_logger",
  "rand",
+ "serde",
  "sqlx",
 ]
 
@@ -3800,6 +3818,7 @@ name = "telegram"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common",
  "config",
  "ethers",
  "log",
@@ -4184,13 +4203,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "common",
+ "config",
  "db",
  "ethers",
+ "itertools 0.12.1",
+ "log",
  "once_cell",
  "reqwest",
  "serde",
+ "sqlx",
  "tokio",
- "utils",
 ]
 
 [[package]]
@@ -4326,17 +4349,6 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
-
-[[package]]
-name = "utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "ethers",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "uuid"

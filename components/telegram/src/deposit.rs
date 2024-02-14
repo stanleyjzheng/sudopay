@@ -1,4 +1,5 @@
-use crate::types::{MyDialogue, State, SudoPayAsset};
+use crate::types::{MyDialogue, State};
+use common::types::SudoPayAsset;
 use ethers::types::H160;
 use std::str::FromStr;
 use teloxide::{

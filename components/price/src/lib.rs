@@ -44,6 +44,8 @@ impl PriceClient {
     }
 
     pub async fn refresh_eth_price(&self) -> anyhow::Result<()> {
+        // TODO: It'd be nice to fetch this from pyth so that we have the actual blast
+        // eth price rather than the "eth" eth price (if there's a depeg)
         let resp = self.client.get(&*COINBASE_ETH_API).send().await?;
 
         if !resp.status().is_success() {
@@ -86,6 +88,7 @@ impl PriceClient {
     }
 
     pub async fn refresh_usdb_price(&self) -> anyhow::Result<()> {
+        // TODO: actually fetch USDB price
         sqlx::query!(
             "INSERT INTO prices (ticker, price) VALUES ($1, $2) ON CONFLICT (ticker) DO UPDATE SET price = EXCLUDED.price, updated_at = CURRENT_TIMESTAMP",
             serde_json::to_string(&Asset::Usdb)?,
