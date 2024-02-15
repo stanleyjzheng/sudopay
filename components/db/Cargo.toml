@@ -17,3 +17,4 @@ chrono = { workspace = true }
 common = { path = "../common" }
 pretty_env_logger = { workspace = true }
 log = { workspace = true }
+once_cell = { workspace = true }

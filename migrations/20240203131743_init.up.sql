@@ -13,9 +13,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Wallet balances
 CREATE TABLE IF NOT EXISTS balances (
   seed_phrase_public_key TEXT PRIMARY KEY NOT NULL,
-  usdb_balance double precision NOT NULL DEFAULT 0,
-  eth_balance double precision NOT NULL DEFAULT 0,
-  accrued_yield_balance double precision NOT NULL DEFAULT 0
+  usdb_balance NUMERIC NOT NULL DEFAULT 0,
+  eth_balance NUMERIC NOT NULL DEFAULT 0,
+  accrued_yield_balance NUMERIC NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Internal transactions
@@ -36,7 +38,7 @@ CREATE TABLE IF NOT EXISTS deposit_requests (
   telegram_id BIGINT NOT NULL,
   depositor_public_key TEXT NOT NULL,
   asset TEXT NOT NULL,
-  amount double precision DEFAULT NULL,
+  unit_amount NUMERIC DEFAULT NULL,
   from_address TEXT DEFAULT NULL,
   matched_transaction_id TEXT DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

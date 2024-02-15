@@ -709,6 +709,7 @@ dependencies = [
  "common",
  "ethers",
  "log",
+ "once_cell",
  "pretty_env_logger",
  "rand",
  "serde",

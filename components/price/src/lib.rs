@@ -4,7 +4,7 @@ use config::Config;
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{query, PgPool};
 
 static COINBASE_ETH_API: Lazy<String> =
     Lazy::new(|| "https://api.coinbase.com/v2/exchange-rates?currency=ETH".to_string());
@@ -68,7 +68,7 @@ impl PriceClient {
                     .parse::<f64>()
                     .map_err(|_| anyhow::anyhow!("Failed to parse USD rate as f64"))?; // Convert the error to anyhow::Error
 
-                sqlx::query!(
+                query!(
                     "INSERT INTO prices (ticker, price) VALUES ($1, $2) ON CONFLICT (ticker) DO UPDATE SET price = EXCLUDED.price, updated_at = CURRENT_TIMESTAMP",
                     serde_json::to_string(&Asset::Eth)?,
                     eth_price
@@ -89,7 +89,7 @@ impl PriceClient {
 
     pub async fn refresh_usdb_price(&self) -> anyhow::Result<()> {
         // TODO: actually fetch USDB price
-        sqlx::query!(
+        query!(
             "INSERT INTO prices (ticker, price) VALUES ($1, $2) ON CONFLICT (ticker) DO UPDATE SET price = EXCLUDED.price, updated_at = CURRENT_TIMESTAMP",
             serde_json::to_string(&Asset::Usdb)?,
             1.0_f64
@@ -103,7 +103,7 @@ impl PriceClient {
     }
 
     pub async fn get_cached_price(&self, asset: Asset) -> anyhow::Result<f64> {
-        let record = sqlx::query!(
+        let record = query!(
             "SELECT price FROM prices WHERE ticker = $1",
             serde_json::to_string(&asset)?
         )

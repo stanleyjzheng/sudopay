@@ -1,6 +1,13 @@
+use std::str::FromStr;
+
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::types::SudoPayAsset;
-use sqlx::{query, types::BigDecimal, FromRow, PgPool, Postgres, Row, Transaction};
+use once_cell::sync::Lazy;
+use sqlx::{query, query_scalar, types::BigDecimal, FromRow, PgPool, Postgres, Row, Transaction};
+
+static LOWER_BOUND_EPSILON: Lazy<BigDecimal> = Lazy::new(|| BigDecimal::from_str("0.999").unwrap());
+static UPPER_BOUND_EPSILON: Lazy<BigDecimal> =
+    Lazy::new(|| BigDecimal::from_str("0.1001").unwrap());
 
 #[derive(FromRow)]
 pub struct Deposit {
@@ -12,7 +19,7 @@ pub struct Deposit {
     pub created_at: DateTime<chrono::Utc>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NewDeposit {
     pub transaction_id: String,
     pub transaction_from_public_key: String,
@@ -55,7 +62,7 @@ impl Deposit {
         transaction_ids: &[String],
     ) -> anyhow::Result<bool> {
         // Prepare a query string with ANY($1) where $1 will be replaced by the list of transaction IDs
-        let query = sqlx::query_scalar!(
+        let query = query_scalar!(
             "SELECT EXISTS (
                 SELECT 1 FROM deposits 
                 WHERE transaction_id = ANY($1)
@@ -78,7 +85,7 @@ impl Deposit {
             .collect::<std::collections::HashSet<_>>()
             .len();
 
-        let query = sqlx::query_scalar!(
+        let query = query_scalar!(
             "SELECT COUNT(DISTINCT transaction_id) FROM deposits WHERE transaction_id = ANY($1)",
             transaction_ids
         );
@@ -89,7 +96,7 @@ impl Deposit {
     }
 
     pub async fn set_deposit_matched(pool: &PgPool, transaction_id: &str) -> anyhow::Result<()> {
-        sqlx::query!(
+        query!(
             "UPDATE deposits SET matched = TRUE WHERE transaction_id = $1",
             transaction_id
         )
@@ -107,7 +114,7 @@ impl Deposit {
         let mut inserted_deposits = Vec::new();
 
         for deposit in deposits {
-            sqlx::query!(
+            query!(
                 "INSERT INTO deposits (transaction_id, transaction_from_public_key, asset, amount, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (transaction_id) DO NOTHING",
                 deposit.transaction_id,
                 deposit.transaction_from_public_key,
@@ -158,12 +165,12 @@ impl Deposit {
     }
 }
 
-#[derive(FromRow)]
+#[derive(FromRow, Clone)]
 pub struct DepositRequest {
     pub id: i32,
     pub depositor_public_key: String,
     pub asset: SudoPayAsset,
-    pub amount: Option<f64>,
+    pub unit_amount: Option<BigDecimal>,
     pub from_address: Option<String>,
     pub matched_transaction_id: Option<String>,
     pub created_at: NaiveDateTime,
@@ -176,14 +183,14 @@ impl DepositRequest {
         pool: &PgPool,
         depositor_public_key: String,
         asset: SudoPayAsset,
-        amount: Option<f64>,
+        unit_amount: Option<BigDecimal>,
         from_address: Option<String>,
     ) -> anyhow::Result<Self> {
         let rec = query!(
-            "INSERT INTO deposit_requests (depositor_public_key, asset, amount, from_address) VALUES ($1, $2, $3, $4) RETURNING id, created_at, updated_at",
+            "INSERT INTO deposit_requests (depositor_public_key, asset, unit_amount, from_address) VALUES ($1, $2, $3, $4) RETURNING id, created_at, updated_at",
             depositor_public_key,
             asset.to_string(),
-            amount,
+            unit_amount,
             from_address,
         )
         .fetch_one(pool)
@@ -193,7 +200,7 @@ impl DepositRequest {
             id: rec.id,
             depositor_public_key,
             asset,
-            amount,
+            unit_amount,
             from_address,
             matched_transaction_id: None,
             created_at: rec.created_at,
@@ -203,7 +210,7 @@ impl DepositRequest {
 
     // Fetch a DepositRequest by its ID
     pub async fn get_by_id(pool: &PgPool, id: i32) -> anyhow::Result<Self> {
-        let rec = sqlx::query!("SELECT * FROM deposit_requests WHERE id = $1", id)
+        let rec = query!("SELECT * FROM deposit_requests WHERE id = $1", id)
             .fetch_one(pool)
             .await?;
 
@@ -213,7 +220,7 @@ impl DepositRequest {
             id: rec.id,
             depositor_public_key: rec.depositor_public_key,
             asset,
-            amount: rec.amount,
+            unit_amount: rec.unit_amount,
             from_address: rec.from_address,
             matched_transaction_id: rec.matched_transaction_id,
             created_at: rec.created_at,
@@ -226,16 +233,16 @@ impl DepositRequest {
     // Fetch DepositRequests by amount within a specified time range, allowing a 1% range on either side
     pub async fn from_amount_by_time(
         pool: &PgPool,
-        amount: f64,
+        amount: BigDecimal,
         asset: SudoPayAsset,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
     ) -> anyhow::Result<Vec<Self>> {
-        let lower_bound = amount * 0.9999; // .01% less than the specified amount
-        let upper_bound = amount * 1.0001; // .01% more than the specified amount
+        let lower_bound = &amount * &*LOWER_BOUND_EPSILON;
+        let upper_bound = &amount * &*UPPER_BOUND_EPSILON;
 
         let recs = query!(
-            "SELECT * FROM deposit_requests WHERE amount BETWEEN $1 AND $2 AND created_at BETWEEN $3 AND $4 AND asset = $5",
+            "SELECT * FROM deposit_requests WHERE unit_amount BETWEEN $1 AND $2 AND created_at BETWEEN $3 AND $4 AND asset = $5",
             lower_bound,
             upper_bound,
             start_time.naive_utc(),
@@ -254,7 +261,7 @@ impl DepositRequest {
                         id: rec.id,
                         depositor_public_key: rec.depositor_public_key.clone(),
                         asset,
-                        amount: rec.amount,
+                        unit_amount: rec.unit_amount.clone(),
                         from_address: rec.from_address.clone(),
                         matched_transaction_id: rec.matched_transaction_id.clone(),
                         created_at: rec.created_at,
@@ -298,7 +305,7 @@ impl DepositRequest {
                         id: rec.id,
                         depositor_public_key: rec.depositor_public_key.clone(),
                         asset,
-                        amount: rec.amount,
+                        unit_amount: rec.unit_amount.clone(),
                         from_address: rec.from_address.clone(),
                         matched_transaction_id: rec.matched_transaction_id.clone(),
                         created_at: rec.created_at,

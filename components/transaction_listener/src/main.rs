@@ -5,7 +5,10 @@ use common::{
     types::SudoPayAsset,
     utils::{u256_to_big_decimal, TOKEN_ADDRESS_TO_ASSET},
 };
-use db::deposits::{Deposit, DepositRequest, NewDeposit};
+use db::{
+    balances::Balance,
+    deposits::{Deposit, DepositRequest, NewDeposit},
+};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -21,6 +24,59 @@ static DEPOSIT_ANTI_FRONTRUN_DURATION_SECONDS: i64 = 3;
 static CEX_WITHDRAWAL_ADDRESSES: Lazy<Vec<String>> =
     Lazy::new(|| vec!["0xc0ffeebabe000000000000000000000000000000".to_string()]);
 
+// returns bool whether to early exit
+async fn commit_deposit_to_user_balance(
+    pool: &PgPool,
+    deposit_requests: Vec<DepositRequest>,
+    new_deposit: &NewDeposit,
+) -> anyhow::Result<bool> {
+    let non_cex_deposit_addresses = deposit_requests
+        .into_iter()
+        .filter(|deposit| {
+            !CEX_WITHDRAWAL_ADDRESSES.contains(&deposit.from_address.clone().unwrap_or_default())
+        })
+        .collect::<Vec<DepositRequest>>();
+
+    let unique_depositing_addresses = non_cex_deposit_addresses
+        .iter()
+        .map(|deposit| deposit.depositor_public_key.clone())
+        .unique()
+        .collect::<Vec<String>>();
+
+    match unique_depositing_addresses.len() {
+        0 => {
+            // didn't match a deposit, proceed with amount matching below
+        }
+        1 => {
+            // we matched a deposit, exit and set the deposit matched
+            Deposit::set_deposit_matched(pool, &new_deposit.transaction_id.clone()).await?;
+            DepositRequest::set_matched_transaction_id(
+                pool,
+                non_cex_deposit_addresses[0].id,
+                new_deposit.transaction_id.clone(),
+            )
+            .await?;
+            Balance::add_to_balance(
+                pool,
+                &non_cex_deposit_addresses[0].depositor_public_key,
+                new_deposit.amount.clone(),
+            )
+            .await?;
+            return Ok(true);
+        }
+        _ => {
+            // we matched multiple deposits, early exit and error for support to handle
+            log::error!(
+                "Multiple deposit requests matched a single deposit: {:?}",
+                unique_depositing_addresses
+            );
+            return Ok(true);
+        }
+    };
+
+    Ok(false)
+}
+
 async fn match_deposits_to_user_deposit_requests(
     pool: &PgPool,
     new_deposit: NewDeposit,
@@ -35,45 +91,27 @@ async fn match_deposits_to_user_deposit_requests(
     let deposit_addresses = DepositRequest::from_address_by_time(
         pool,
         format!("{:#?}", new_deposit.transaction_from_public_key),
-        new_deposit.asset,
+        new_deposit.asset.clone(),
         start_time,
         end_time,
     )
     .await?;
 
-    let non_cex_deposit_addresses = deposit_addresses
-        .into_iter()
-        .filter(|deposit| {
-            !CEX_WITHDRAWAL_ADDRESSES.contains(&deposit.from_address.clone().unwrap_or_default())
-        })
-        .collect::<Vec<DepositRequest>>();
+    let early_exit = commit_deposit_to_user_balance(pool, deposit_addresses, &new_deposit).await?;
 
-    let unique_deposit_addresses = non_cex_deposit_addresses
-        .iter()
-        .map(|deposit| deposit.depositor_public_key.clone())
-        .unique()
-        .collect::<Vec<String>>();
+    if early_exit {
+        return Ok(());
+    }
 
-    match unique_deposit_addresses.len() {
-        0 => {}
-        1 => {
-            // we matched a deposit
-            Deposit::set_deposit_matched(pool, &new_deposit.transaction_id.clone()).await?;
-            DepositRequest::set_matched_transaction_id(
-                pool,
-                non_cex_deposit_addresses[0].id,
-                new_deposit.transaction_id.clone(),
-            )
-            .await?;
-        }
-        _ => {
-            // we matched multiple deposits
-            log::error!(
-                "Multiple deposit requests matched a single deposit: {:?}",
-                unique_deposit_addresses
-            );
-        }
-    };
+    let deposit_requests = DepositRequest::from_amount_by_time(
+        pool,
+        new_deposit.amount.clone(),
+        new_deposit.asset.clone(),
+        start_time,
+        end_time,
+    )
+    .await?;
+    commit_deposit_to_user_balance(pool, deposit_requests, &new_deposit).await?;
 
     Ok(())
 }
@@ -83,7 +121,7 @@ async fn fetch_new_eth_deposits(pool: &mut PgPool, client: &Client) -> anyhow::R
     let mut all_eth_transfer_ids: Vec<String> = Vec::new();
 
     loop {
-        let eth_transfer_response = list_eth_transfers(&client, next_token.clone()).await?;
+        let eth_transfer_response = list_eth_transfers(client, next_token.clone()).await?;
         let current_page_ids = eth_transfer_response
             .items
             .iter()
@@ -111,7 +149,11 @@ async fn fetch_new_eth_deposits(pool: &mut PgPool, client: &Client) -> anyhow::R
             })
             .collect::<Vec<_>>();
 
-        Deposit::insert_bulk_deposits(pool, new_deposits).await?;
+        Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
+
+        for new_deposit in new_deposits {
+            match_deposits_to_user_deposit_requests(pool, new_deposit).await?;
+        }
 
         next_token = Some(eth_transfer_response.link.next_token);
 
@@ -129,7 +171,7 @@ async fn fetch_new_erc20_deposits(pool: &mut PgPool, client: &Client) -> anyhow:
     let mut all_erc20_transfer_ids: Vec<String> = Vec::new();
 
     loop {
-        let erc20_transfer_response = list_erc20_transfers(&client, next_token.clone()).await?;
+        let erc20_transfer_response = list_erc20_transfers(client, next_token.clone()).await?;
         let current_page_ids = erc20_transfer_response
             .items
             .iter()
@@ -162,7 +204,11 @@ async fn fetch_new_erc20_deposits(pool: &mut PgPool, client: &Client) -> anyhow:
             )
             .collect::<Vec<_>>();
 
-        Deposit::insert_bulk_deposits(pool, new_deposits).await?;
+        Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
+
+        for new_deposit in new_deposits {
+            match_deposits_to_user_deposit_requests(pool, new_deposit).await?;
+        }
 
         next_token = Some(erc20_transfer_response.link.next_token);
 
@@ -183,11 +229,11 @@ async fn main() -> anyhow::Result<()> {
 
     let mut pool = PgPool::connect(&config.database_url).await?;
 
-    // get all eth transfers
-    fetch_new_eth_deposits(&mut pool, &client).await?;
+    loop {
+        // get all eth transfers
+        fetch_new_eth_deposits(&mut pool, &client).await?;
 
-    // get all erc20 transfers
-    fetch_new_erc20_deposits(&mut pool, &client).await?;
-
-    Ok(())
+        // get all erc20 transfers
+        fetch_new_erc20_deposits(&mut pool, &client).await?;
+    }
 }
