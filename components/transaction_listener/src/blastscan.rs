@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use chrono::{DateTime, Utc};
-use common::utils::{
-    deserialize_iso8601_date_time, deserialize_u256_from_json_number_or_string, CONTRACT_ADDRESS,
-};
+use common::utils::{deserialize_iso8601_date_time, deserialize_u256_from_json_number_or_string};
+use config::Config;
 use ethers::types::U256;
 use reqwest::Client;
 use serde::Deserialize;
@@ -58,6 +57,7 @@ pub(crate) struct BlastScanTransactionsResponse {
 pub(crate) async fn list_eth_transfers(
     client: &Client,
     next_token: Option<String>,
+    config: &Config,
 ) -> anyhow::Result<BlastScanTransactionsResponse> {
     let url = match next_token {
         Some(token) => format!("{}&nextToken={}", BLASTSCAN_ACCOUNT_URL, token),
@@ -79,8 +79,7 @@ pub(crate) async fn list_eth_transfers(
                 .items
                 .into_iter()
                 .filter(|item| {
-                    item.value > U256::zero()
-                        && item.to.to_lowercase() == format!("{:#?}", CONTRACT_ADDRESS)
+                    item.value > U256::zero() && item.to.to_lowercase() == config.contract_address
                 })
                 .collect(),
             link: response.link,
@@ -98,6 +97,7 @@ pub(crate) async fn list_eth_transfers(
 pub(crate) async fn list_erc20_transfers(
     client: &Client,
     next_token: Option<String>,
+    config: &Config,
 ) -> anyhow::Result<BlastScanErc20Response> {
     let url = match next_token {
         Some(token) => format!("{}&nextToken={}", BLASTSCAN_ERC20_URL, token),
@@ -117,7 +117,7 @@ pub(crate) async fn list_erc20_transfers(
             items: response
                 .items
                 .into_iter()
-                .filter(|item| item.to.to_lowercase() == format!("{:#?}", CONTRACT_ADDRESS))
+                .filter(|item| item.to.to_lowercase() == config.contract_address)
                 .collect(),
             link: response.link,
         };

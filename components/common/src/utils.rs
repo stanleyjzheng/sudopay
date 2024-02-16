@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use ethers::types::{H160, U256};
+use ethers::types::U256;
 use once_cell::sync::Lazy;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
@@ -22,8 +22,21 @@ pub static TOKEN_ADDRESS_TO_ASSET: Lazy<HashMap<String, SudoPayAsset>> = Lazy::n
     ])
 });
 
-pub static CONTRACT_ADDRESS: Lazy<H160> =
-    Lazy::new(|| H160::from_str("0xBeafFE58538eAfe49d1E4455500BC659f5D37433").unwrap());
+pub fn asset_to_decimals(asset: &SudoPayAsset) -> u64 {
+    match asset.to_owned() {
+        SudoPayAsset::Weth => 18,
+        SudoPayAsset::Usdb => 18,
+        SudoPayAsset::Eth => 18,
+    }
+}
+
+pub fn asset_to_address(asset: &SudoPayAsset) -> Option<String> {
+    match asset.to_owned() {
+        SudoPayAsset::Weth => Some("0x4200000000000000000000000000000000000023".to_string()),
+        SudoPayAsset::Usdb => Some("0x4200000000000000000000000000000000000022".to_string()),
+        SudoPayAsset::Eth => None,
+    }
+}
 
 pub fn deserialize_u256_from_json_number_or_string<'de, D>(
     deserializer: D,

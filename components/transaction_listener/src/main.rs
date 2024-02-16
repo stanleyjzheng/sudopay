@@ -5,6 +5,7 @@ use common::{
     types::SudoPayAsset,
     utils::{u256_to_big_decimal, TOKEN_ADDRESS_TO_ASSET},
 };
+use config::Config;
 use db::{
     balances::Balance,
     deposits::{Deposit, DepositRequest, NewDeposit},
@@ -20,7 +21,7 @@ use crate::blastscan::{list_erc20_transfers, list_eth_transfers};
 static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
 static DEPOSIT_ANTI_FRONTRUN_DURATION_SECONDS: i64 = 3;
 
-// TODO: CEX withdrawal addresses upon mainnet, or an automated process to pull walletlabels
+// TODO: CEX withdrawal addresses upon mainnet, or an automated process to pull wallet labels
 static CEX_WITHDRAWAL_ADDRESSES: Lazy<Vec<String>> =
     Lazy::new(|| vec!["0xc0ffeebabe000000000000000000000000000000".to_string()]);
 
@@ -116,12 +117,16 @@ async fn match_deposits_to_user_deposit_requests(
     Ok(())
 }
 
-async fn fetch_new_eth_deposits(pool: &mut PgPool, client: &Client) -> anyhow::Result<()> {
+async fn fetch_new_eth_deposits(
+    pool: &mut PgPool,
+    client: &Client,
+    config: &Config,
+) -> anyhow::Result<()> {
     let mut next_token: Option<String> = None;
     let mut all_eth_transfer_ids: Vec<String> = Vec::new();
 
     loop {
-        let eth_transfer_response = list_eth_transfers(client, next_token.clone()).await?;
+        let eth_transfer_response = list_eth_transfers(client, next_token.clone(), config).await?;
         let current_page_ids = eth_transfer_response
             .items
             .iter()
@@ -166,12 +171,17 @@ async fn fetch_new_eth_deposits(pool: &mut PgPool, client: &Client) -> anyhow::R
     Ok(())
 }
 
-async fn fetch_new_erc20_deposits(pool: &mut PgPool, client: &Client) -> anyhow::Result<()> {
+async fn fetch_new_erc20_deposits(
+    pool: &mut PgPool,
+    client: &Client,
+    config: &Config,
+) -> anyhow::Result<()> {
     let mut next_token: Option<String> = None;
     let mut all_erc20_transfer_ids: Vec<String> = Vec::new();
 
     loop {
-        let erc20_transfer_response = list_erc20_transfers(client, next_token.clone()).await?;
+        let erc20_transfer_response =
+            list_erc20_transfers(client, next_token.clone(), config).await?;
         let current_page_ids = erc20_transfer_response
             .items
             .iter()
@@ -231,9 +241,9 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         // get all eth transfers
-        fetch_new_eth_deposits(&mut pool, &client).await?;
+        fetch_new_eth_deposits(&mut pool, &client, &config).await?;
 
         // get all erc20 transfers
-        fetch_new_erc20_deposits(&mut pool, &client).await?;
+        fetch_new_erc20_deposits(&mut pool, &client, &config).await?;
     }
 }

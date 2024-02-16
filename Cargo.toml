@@ -9,6 +9,7 @@ members = [
     "components/telegram",
     "components/transaction_listener",
     "components/common",
+    "components/transaction_sender",
 ]
 
 [workspace.dependencies]

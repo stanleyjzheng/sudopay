@@ -5,6 +5,10 @@ use std::env;
 pub struct Config {
     pub database_url: String,
     pub teloxide_token: String,
+    pub transferrer_private_key: String,
+    pub contract_address: String,
+    pub http_rpc_url: String,
+    pub chain_id: u64,
 }
 
 impl Config {
@@ -13,10 +17,24 @@ impl Config {
 
         let teloxide_token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN");
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL");
+        let transferrer_private_key =
+            env::var("TRANSFERRER_PRIVATE_KEY").expect("TRANSFERRER_PRIVATE_KEY");
+        let contract_address = env::var("CONTRACT_ADDRESS")
+            .expect("CONTRACT_ADDRESS")
+            .to_lowercase();
+        let http_rpc_url = env::var("HTTP_RPC_URL").expect("HTTP_RPC_URL");
+        let chain_id = env::var("CHAIN_ID")
+            .expect("CHAIN_ID")
+            .parse::<u64>()
+            .expect("CHAIN_ID must be a number");
 
         Config {
             database_url,
             teloxide_token,
+            transferrer_private_key,
+            contract_address,
+            http_rpc_url,
+            chain_id,
         }
     }
 }
