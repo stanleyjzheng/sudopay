@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use common::types::SudoPayAsset;
+use common::{types::SudoPayAsset, utils::asset_to_decimals};
 use once_cell::sync::Lazy;
 use sqlx::{query, query_scalar, types::BigDecimal, FromRow, PgPool, Postgres, Row, Transaction};
 
@@ -238,8 +238,12 @@ impl DepositRequest {
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
     ) -> anyhow::Result<Vec<Self>> {
-        let lower_bound = &amount * &*LOWER_BOUND_EPSILON;
-        let upper_bound = &amount * &*UPPER_BOUND_EPSILON;
+        let decimals = asset_to_decimals(&asset);
+        let (_, scale) = amount.as_bigint_and_exponent();
+        let unit_amount = amount.with_scale(scale - decimals as i64);
+
+        let lower_bound = &unit_amount * &*LOWER_BOUND_EPSILON;
+        let upper_bound = &unit_amount * &*UPPER_BOUND_EPSILON;
 
         let recs = query!(
             "SELECT * FROM deposit_requests WHERE unit_amount BETWEEN $1 AND $2 AND created_at BETWEEN $3 AND $4 AND asset = $5",

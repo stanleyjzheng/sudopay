@@ -10,6 +10,7 @@ use deposit::{
 };
 use log::info;
 use price::{Asset, PriceClient};
+use sqlx::PgPool;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
@@ -26,12 +27,19 @@ async fn main() {
     let config = Config::new_from_env();
     let bot = Bot::new(config.teloxide_token.clone());
 
+    let pool = PgPool::connect(&config.database_url).await.unwrap();
     let price_client = Arc::new(Mutex::new(
-        PriceClient::new(Some(config), None).await.unwrap(),
+        PriceClient::new(Some(config), Some(pool.clone()))
+            .await
+            .unwrap(),
     ));
 
     Dispatcher::builder(bot, schema())
-        .dependencies(dptree::deps![price_client, InMemStorage::<State>::new()])
+        .dependencies(dptree::deps![
+            pool,
+            price_client,
+            InMemStorage::<State>::new()
+        ])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

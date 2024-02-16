@@ -1,7 +1,11 @@
-use crate::types::{MyDialogue, State};
-use common::types::SudoPayAsset;
-use ethers::types::H160;
 use std::str::FromStr;
+
+use crate::types::{MyDialogue, State};
+
+use common::types::SudoPayAsset;
+use db::{deposits::DepositRequest, users::User};
+use ethers::types::H160;
+use sqlx::{types::BigDecimal, PgPool};
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
@@ -26,7 +30,7 @@ pub async fn click_deposit_address_or_deposit_amount(
 
 pub async fn click_choose_deposit_coin(bot: Bot, dialogue: MyDialogue) -> anyhow::Result<()> {
     let deposit_assets =
-        ["USDB", "ETH/WETH"].map(|product| InlineKeyboardButton::callback(product, product));
+        ["USDB", "ETH", "WETH"].map(|product| InlineKeyboardButton::callback(product, product));
 
     bot.send_message(
         dialogue.chat_id(),
@@ -96,7 +100,7 @@ pub async fn receive_deposit_amount(
 ) -> anyhow::Result<()> {
     match msg.text().map(ToOwned::to_owned) {
         Some(deposit_amount) => {
-            let deposit_amount = match f64::from_str(&deposit_amount) {
+            let deposit_amount = match BigDecimal::from_str(&deposit_amount) {
                 Ok(deposit_amount) => deposit_amount,
                 Err(_) => {
                     bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it.")
@@ -146,12 +150,33 @@ pub async fn receive_deposit_coin_by_amount(
     bot: Bot,
     dialogue: MyDialogue,
     q: CallbackQuery,
-    amount: f64,
+    amount: BigDecimal,
+    pool: &PgPool,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
             Ok(asset) => {
-                // TODO: Push this to postgres here
+                let user = match User::get_user(pool, dialogue.chat_id().0).await? {
+                    Some(u) => u,
+                    None => {
+                        bot.send_message(
+                            dialogue.chat_id(),
+                            "You are not registered. Please register with /start.",
+                        )
+                        .await?;
+                        dialogue.exit().await?;
+                        return Ok(());
+                    }
+                };
+
+                DepositRequest::new(
+                    pool,
+                    user.seed_phrase_public_key,
+                    asset.clone(),
+                    Some(amount.clone()),
+                    None,
+                )
+                .await?;
 
                 let return_to_main_menu = ["Return to main menu"]
                     .map(|product| InlineKeyboardButton::callback(product, product));
@@ -176,18 +201,39 @@ pub async fn receive_deposit_coin_by_address(
     dialogue: MyDialogue,
     q: CallbackQuery,
     address: H160,
+    pool: &PgPool,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
             Ok(asset) => {
-                // TODO: Push this to postgres here
+                let user = match User::get_user(pool, dialogue.chat_id().0).await? {
+                    Some(u) => u,
+                    None => {
+                        bot.send_message(
+                            dialogue.chat_id(),
+                            "You are not registered. Please register with /start.",
+                        )
+                        .await?;
+                        dialogue.exit().await?;
+                        return Ok(());
+                    }
+                };
+
+                DepositRequest::new(
+                    pool,
+                    user.seed_phrase_public_key,
+                    asset.clone(),
+                    None,
+                    Some(format!("{:#?}", address)),
+                )
+                .await?;
 
                 let return_to_main_menu = ["Return to main menu"]
                     .map(|product| InlineKeyboardButton::callback(product, product));
 
                 bot.send_message(
                     dialogue.chat_id(),
-                    format!("You have created a deposit request for {} from your address {:#?}. This deposit request expires in an hour; please create a new deposit request past this time.", address, asset),
+                    format!("You have created a deposit request for {} from your address {:#?}. This deposit request expires in 3 minutes; please create a new deposit request past this time.", address, asset),
                 ).reply_markup(InlineKeyboardMarkup::new([return_to_main_menu])).await?;
             }
             Err(_) => {

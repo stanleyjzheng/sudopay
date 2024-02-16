@@ -71,8 +71,8 @@ pub async fn make_erc20_transfer(
     Ok(tx_request.tx_hash())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::test]
+async fn it_makes_testnet_eth_transfers() -> anyhow::Result<()> {
     let config = Config::new_from_env();
 
     make_eth_transfer(

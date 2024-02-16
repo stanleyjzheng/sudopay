@@ -1,4 +1,5 @@
 use ethers::types::H160;
+use sqlx::types::BigDecimal;
 use teloxide::{
     dispatching::dialogue::{Dialogue, InMemStorage},
     utils::command::BotCommands,
@@ -16,7 +17,7 @@ pub enum State {
         user_address: H160,
     },
     UserInputtedDepositAmount {
-        deposit_amount: f64,
+        deposit_amount: BigDecimal,
     },
 }
 

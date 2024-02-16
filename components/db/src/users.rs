@@ -4,7 +4,7 @@ use ethers::signers::{
     coins_bip39::{English, Mnemonic},
     MnemonicBuilder, Signer,
 };
-use sqlx::{query, query_as, PgConnection};
+use sqlx::{query, query_as, PgPool};
 
 pub struct User {
     pub telegram_id: i64,
@@ -14,7 +14,7 @@ pub struct User {
 }
 
 impl User {
-    pub async fn new(conn: &mut PgConnection, telegram_id: i64) -> anyhow::Result<User> {
+    pub async fn new(pool: &PgPool, telegram_id: i64) -> anyhow::Result<User> {
         let mnemonic: Mnemonic<English> = Mnemonic::new_with_count(&mut rand::thread_rng(), 12)?;
         let wallet = MnemonicBuilder::<English>::default()
             .phrase(mnemonic.to_phrase().as_str())
@@ -37,16 +37,13 @@ impl User {
             mnemonic.to_phrase(),
             format!("{:#?}", address)
         )
-        .fetch_one(&mut *conn)
+        .fetch_one(pool)
         .await?;
 
         Ok(user)
     }
 
-    pub async fn get_user(
-        conn: &mut PgConnection,
-        telegram_id: i64,
-    ) -> anyhow::Result<Option<User>> {
+    pub async fn get_user(pool: &PgPool, telegram_id: i64) -> anyhow::Result<Option<User>> {
         let user = query_as!(
             User,
             "
@@ -56,7 +53,7 @@ impl User {
             ",
             telegram_id
         )
-        .fetch_optional(&mut *conn)
+        .fetch_optional(pool)
         .await?;
 
         Ok(user)
@@ -64,14 +61,14 @@ impl User {
 
     pub async fn check_password(
         &self,
-        conn: &mut PgConnection,
+        pool: &PgPool,
         submitted_password: &str,
     ) -> anyhow::Result<bool> {
         let row = query!(
             "SELECT salted_password FROM users WHERE telegram_id = $1",
             self.telegram_id
         )
-        .fetch_optional(&mut *conn)
+        .fetch_optional(pool)
         .await?;
 
         match row {
@@ -88,11 +85,7 @@ impl User {
         }
     }
 
-    pub async fn set_password(
-        &mut self,
-        conn: &mut PgConnection,
-        password: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn set_password(&mut self, pool: &PgPool, password: &str) -> anyhow::Result<()> {
         let hashed_password = hash(password, bcrypt::DEFAULT_COST)?;
         query!(
             "
@@ -103,7 +96,7 @@ impl User {
             hashed_password,
             self.telegram_id
         )
-        .execute(&mut *conn)
+        .execute(pool)
         .await?;
 
         Ok(())
