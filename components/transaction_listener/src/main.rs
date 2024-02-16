@@ -22,7 +22,8 @@ use tokio::time::{sleep, Duration};
 use crate::blastscan::{list_erc20_transfers, list_eth_transfers};
 use crate::notifications::notify_of_deposit;
 
-static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
+// static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
+static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 86400 * 5;
 static DEPOSIT_ANTI_FRONTRUN_DURATION_SECONDS: i64 = 3;
 
 // TODO: CEX withdrawal addresses upon mainnet, or an automated process to pull wallet labels
@@ -115,12 +116,14 @@ async fn match_deposits_to_user_deposit_requests(
 
     let deposit_addresses = DepositRequest::from_address_by_time(
         pool,
-        format!("{:#?}", new_deposit.transaction_from_public_key),
+        new_deposit.transaction_from_public_key.to_lowercase(),
         new_deposit.asset.clone(),
         start_time,
         end_time,
     )
     .await?;
+
+    dbg!(deposit_addresses.clone());
 
     let early_exit =
         commit_deposit_to_user_balance(pool, deposit_addresses, &new_deposit, teloxide_bot).await?;
@@ -172,13 +175,15 @@ async fn fetch_new_eth_deposits(
             .into_iter()
             .filter(|item| new_transaction_ids.contains(&item.id))
             .map(|item| NewDeposit {
-                transaction_id: item.id,
+                transaction_id: item.id.to_lowercase(),
                 amount: u256_to_big_decimal(item.value),
-                transaction_from_public_key: item.from,
+                transaction_from_public_key: item.from.to_lowercase(),
                 asset: SudoPayAsset::Eth,
-                created_at: item.created_at,
+                created_at: item.timestamp,
             })
             .collect::<Vec<_>>();
+
+        dbg!(new_deposits.clone());
 
         Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
 
@@ -186,7 +191,14 @@ async fn fetch_new_eth_deposits(
             match_deposits_to_user_deposit_requests(pool, teloxide_bot, new_deposit).await?;
         }
 
-        next_token = Some(eth_transfer_response.link.next_token);
+        match eth_transfer_response.link.next_token {
+            Some(token) => {
+                next_token = Some(token);
+            }
+            None => {
+                break;
+            }
+        }
 
         // Blastscan minimum req/s is 1, so we sleep for 1s after each request. probably fine for now since we won't be hitting
         // 100 eth/erc20 deposits/s for a while. Or probably ever.
@@ -230,9 +242,9 @@ async fn fetch_new_erc20_deposits(
             .filter_map(
                 |item| match TOKEN_ADDRESS_TO_ASSET.get(&item.token_address) {
                     Some(asset) => Some(NewDeposit {
-                        transaction_id: item.tx_hash,
+                        transaction_id: item.tx_hash.to_lowercase(),
                         amount: u256_to_big_decimal(item.amount),
-                        transaction_from_public_key: item.from,
+                        transaction_from_public_key: item.from.to_ascii_lowercase(),
                         asset: asset.clone(),
                         created_at: item.created_at,
                     }),
@@ -241,13 +253,22 @@ async fn fetch_new_erc20_deposits(
             )
             .collect::<Vec<_>>();
 
+        dbg!(new_deposits.clone());
+
         Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
 
         for new_deposit in new_deposits {
             match_deposits_to_user_deposit_requests(pool, teloxide_bot, new_deposit).await?;
         }
 
-        next_token = Some(erc20_transfer_response.link.next_token);
+        match erc20_transfer_response.link.next_token {
+            Some(token) => {
+                next_token = Some(token);
+            }
+            None => {
+                break;
+            }
+        }
 
         // Blastscan minimum req/s is 1, so we sleep for 1s after each request. probably fine for now since we won't be hitting
         // 100 eth/erc20 deposits/s for a while. Or probably ever.
@@ -260,6 +281,9 @@ async fn fetch_new_erc20_deposits(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+    log::info!("Starting transaction listener...");
+
     let client = Client::new();
 
     let config = config::Config::new_from_env();

@@ -3,11 +3,18 @@ use chrono::{DateTime, Utc};
 use common::utils::{deserialize_iso8601_date_time, deserialize_u256_from_json_number_or_string};
 use config::Config;
 use ethers::types::U256;
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
 
-static BLASTSCAN_ACCOUNT_URL: &str = "https://api.routescan.io/v2/network/testnet/evm/168587773/address/0x841886AB34886FE435Ee8f34b08119f051A40a28/transactions?sort=desc&limit=100";
-static BLASTSCAN_ERC20_URL: &str = "https://api.routescan.io/v2/network/testnet/evm/168587773/address/0x841886AB34886FE435Ee8f34b08119f051A40a28/erc20-transfers?sort=desc&limit=100";
+static CONTRACT_ADDRESS: Lazy<String> =
+    Lazy::new(|| Config::new_from_env().contract_address.to_lowercase());
+static BLASTSCAN_ACCOUNT_URL: Lazy<String> = Lazy::new(|| {
+    format!("https://api.routescan.io/v2/network/testnet/evm/168587773/address/{}/transactions?sort=desc&limit=100", &*CONTRACT_ADDRESS)
+});
+static BLASTSCAN_ERC20_URL: Lazy<String> = Lazy::new(|| {
+    format!("https://api.routescan.io/v2/network/testnet/evm/168587773/address/{}/erc20-transfers?sort=desc&limit=100", &*CONTRACT_ADDRESS)
+});
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -22,12 +29,12 @@ pub(crate) struct BlastScanErc20Item {
     pub amount: U256,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BlastScanTransactionsItem {
     pub id: String,
     #[serde(deserialize_with = "deserialize_iso8601_date_time")]
-    pub created_at: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
     pub from: String,
     pub to: String,
     #[serde(deserialize_with = "deserialize_u256_from_json_number_or_string")]
@@ -42,13 +49,13 @@ pub(crate) struct BlastScanErc20Response {
     pub link: BlastScanNext,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BlastScanNext {
-    pub next_token: String,
+    pub next_token: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub(crate) struct BlastScanTransactionsResponse {
     pub items: Vec<BlastScanTransactionsItem>,
     pub link: BlastScanNext,
@@ -60,7 +67,7 @@ pub(crate) async fn list_eth_transfers(
     config: &Config,
 ) -> anyhow::Result<BlastScanTransactionsResponse> {
     let url = match next_token {
-        Some(token) => format!("{}&nextToken={}", BLASTSCAN_ACCOUNT_URL, token),
+        Some(token) => format!("{}&nextToken={}", &*BLASTSCAN_ACCOUNT_URL, token),
         None => BLASTSCAN_ACCOUNT_URL.to_string(),
     };
 
@@ -100,7 +107,7 @@ pub(crate) async fn list_erc20_transfers(
     config: &Config,
 ) -> anyhow::Result<BlastScanErc20Response> {
     let url = match next_token {
-        Some(token) => format!("{}&nextToken={}", BLASTSCAN_ERC20_URL, token),
+        Some(token) => format!("{}&nextToken={}", &*BLASTSCAN_ERC20_URL, token),
         None => BLASTSCAN_ERC20_URL.to_string(),
     };
 

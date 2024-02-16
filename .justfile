@@ -8,3 +8,7 @@ dev-telegram:
   just update-prices && RUST_LOG={{ rust_log }} cargo watch -x 'run --bin telegram'
 update-prices:
   RUST_LOG={{ rust_log }} cargo run --bin price
+purge-sql:
+  sqlx migrate revert && sqlx migrate run
+transaction-listener:
+  RUST_LOG={{ rust_log }} cargo run --bin transaction_listener

@@ -163,9 +163,32 @@ impl Deposit {
 
         Ok(non_existing_ids)
     }
+
+    pub async fn filter_existing_transaction_ids(
+        pool: &PgPool,
+        transaction_ids: &[String],
+    ) -> anyhow::Result<Vec<String>> {
+        let query_string = r#"
+            WITH input_ids(id) AS (
+                SELECT unnest($1::text[]) 
+            )
+            SELECT input_ids.id
+            FROM input_ids
+            JOIN transactions ON transactions.id = input_ids.id
+        "#;
+
+        let result = sqlx::query(query_string)
+            .bind(transaction_ids)
+            .fetch_all(pool)
+            .await?;
+
+        let existing_ids: Vec<String> = result.into_iter().map(|row| row.get(0)).collect();
+
+        Ok(existing_ids)
+    }
 }
 
-#[derive(FromRow, Clone)]
+#[derive(FromRow, Debug, Clone)]
 pub struct DepositRequest {
     pub id: i32,
     pub depositor_public_key: String,

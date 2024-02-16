@@ -21,3 +21,4 @@ sqlx = { workpace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 teloxide = { workspace = true }
+pretty_env_logger = { workspace = true }
