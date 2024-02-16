@@ -12,7 +12,8 @@ log = { workspace = true }
 pretty_env_logger = { workspace = true }
 price = { path = '../price' }
 sqlx = { workspace = true }
-teloxide = { version = "0.12", features = ["macros"] }
 tokio = { workspace = true }
 common = { path = "../common" }
 db = { path = "../db" }
+num-traits = "0.2.18"
+teloxide = { workspace = true }

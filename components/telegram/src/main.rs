@@ -1,5 +1,7 @@
 mod deposit;
+mod start;
 mod types;
+mod utils;
 
 use std::sync::Arc;
 
@@ -9,15 +11,15 @@ use deposit::{
     receive_deposit_coin_by_address, receive_deposit_coin_by_amount, receive_deposit_type,
 };
 use log::info;
-use price::{Asset, PriceClient};
+use price::PriceClient;
 use sqlx::PgPool;
+use start::{cancel, help, invalid_state, start};
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
-    utils::command::BotCommands,
 };
 use tokio::sync::Mutex;
-use types::{Command, MyDialogue, State};
+use types::{Command, State};
 
 #[tokio::main]
 async fn main() {
@@ -78,50 +80,4 @@ fn schema() -> UpdateHandler<anyhow::Error> {
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(message_handler)
         .branch(callback_query_handler)
-}
-
-async fn start(
-    bot: Bot,
-    _dialogue: MyDialogue,
-    msg: Message,
-    price_client: Arc<Mutex<PriceClient>>,
-) -> anyhow::Result<()> {
-    let price_client = price_client.lock().await;
-
-    let eth_price = price_client.get_cached_price(Asset::Eth).await?;
-    // TODO: Fetch USDB balance
-    let usdb_balance = 1000;
-    // TODO: Fetch ETH balance
-    let eth_balance = 0.5;
-    bot.send_message(
-        msg.chat.id,
-        format!(
-            "**Eth**: ${} \n🤑 SudoPay 📲 [twitter](https://x.com/sudolabel) \n═══ Your Balances ═══\n {} USDB\n {} ETH",
-            eth_price, usdb_balance, eth_balance
-        ),
-    )
-    .await?;
-    Ok(())
-}
-
-async fn help(bot: Bot, msg: Message) -> anyhow::Result<()> {
-    bot.send_message(msg.chat.id, Command::descriptions().to_string())
-        .await?;
-    Ok(())
-}
-
-async fn cancel(bot: Bot, dialogue: MyDialogue, msg: Message) -> anyhow::Result<()> {
-    bot.send_message(msg.chat.id, "Cancelling the dialogue.")
-        .await?;
-    dialogue.exit().await?;
-    Ok(())
-}
-
-async fn invalid_state(bot: Bot, msg: Message) -> anyhow::Result<()> {
-    bot.send_message(
-        msg.chat.id,
-        "Unable to handle the message. Type /help to see the usage.",
-    )
-    .await?;
-    Ok(())
 }

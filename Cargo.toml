@@ -36,6 +36,7 @@ tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 itertools = "0.12"
+teloxide = { version = "0.12", features = ["macros"] }
 
 [profile.dev]
 split-debuginfo = "unpacked"

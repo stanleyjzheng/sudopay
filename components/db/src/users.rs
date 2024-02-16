@@ -9,12 +9,19 @@ use sqlx::{query, query_as, PgPool};
 pub struct User {
     pub telegram_id: i64,
     pub salted_password: Option<String>,
+    pub telegram_tag: String,
+    pub onboarded: bool,
     pub seed_phrase: String,
     pub seed_phrase_public_key: String,
 }
 
 impl User {
-    pub async fn new(pool: &PgPool, telegram_id: i64) -> anyhow::Result<User> {
+    pub async fn new(
+        pool: &PgPool,
+        telegram_id: i64,
+        telegram_tag: String,
+        onboarded: bool,
+    ) -> anyhow::Result<User> {
         let mnemonic: Mnemonic<English> = Mnemonic::new_with_count(&mut rand::thread_rng(), 12)?;
         let wallet = MnemonicBuilder::<English>::default()
             .phrase(mnemonic.to_phrase().as_str())
@@ -27,15 +34,19 @@ impl User {
             INSERT INTO users (
                 telegram_id,
                 seed_phrase,
-                seed_phrase_public_key
+                seed_phrase_public_key,
+                telegram_tag,
+                onboarded
             )
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (telegram_id) DO NOTHING
-            RETURNING telegram_id, salted_password, seed_phrase, seed_phrase_public_key;
+            RETURNING telegram_id, salted_password, seed_phrase, telegram_tag, onboarded, seed_phrase_public_key;
             ",
             telegram_id,
             mnemonic.to_phrase(),
-            format!("{:#?}", address)
+            format!("{:#?}", address),
+            telegram_tag,
+            onboarded
         )
         .fetch_one(pool)
         .await?;
@@ -47,11 +58,69 @@ impl User {
         let user = query_as!(
             User,
             "
-            SELECT telegram_id, salted_password, seed_phrase, seed_phrase_public_key
+            SELECT telegram_id, salted_password, seed_phrase, seed_phrase_public_key, onboarded, telegram_tag
             FROM users
             WHERE telegram_id = $1;
             ",
             telegram_id
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn get_user_by_telegram_tag(
+        pool: &PgPool,
+        telegram_tag: String,
+    ) -> anyhow::Result<Option<User>> {
+        let user = query_as!(
+            User,
+            "
+            SELECT telegram_id, salted_password, seed_phrase, seed_phrase_public_key, onboarded, telegram_tag
+            FROM users
+            WHERE telegram_tag = $1;
+            ",
+            telegram_tag
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn set_telegram_id(
+        pool: &PgPool,
+        telegram_tag: String,
+        telegram_id: i64,
+    ) -> anyhow::Result<()> {
+        query!(
+            "
+            UPDATE users
+            SET telegram_id = $1
+            WHERE telegram_tag = $2;
+            ",
+            telegram_id,
+            telegram_tag
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_user_by_address(
+        pool: &PgPool,
+        seed_phrase_public_key: String,
+    ) -> anyhow::Result<Option<User>> {
+        let user = query_as!(
+            User,
+            "
+            SELECT telegram_id, salted_password, seed_phrase, seed_phrase_public_key, onboarded, telegram_tag
+            FROM users
+            WHERE seed_phrase_public_key = $1;
+            ",
+            seed_phrase_public_key
         )
         .fetch_optional(pool)
         .await?;

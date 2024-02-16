@@ -5,7 +5,8 @@ use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use sqlx::{query, query_as, types::BigDecimal, PgPool};
 
-static ANNUAL_YIELD_RATE: Lazy<BigDecimal> = Lazy::new(|| BigDecimal::from_str("0.035").unwrap());
+pub static ANNUAL_YIELD_RATE: Lazy<BigDecimal> =
+    Lazy::new(|| BigDecimal::from_str("0.035").unwrap());
 
 pub struct Balance {
     pub seed_phrase_public_key: String,

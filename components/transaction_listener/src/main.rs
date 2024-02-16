@@ -1,4 +1,5 @@
 mod blastscan;
+mod notifications;
 
 use chrono::Utc;
 use common::{
@@ -9,14 +10,17 @@ use config::Config;
 use db::{
     balances::Balance,
     deposits::{Deposit, DepositRequest, NewDeposit},
+    users::User,
 };
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use sqlx::PgPool;
+use teloxide::Bot;
 use tokio::time::{sleep, Duration};
 
 use crate::blastscan::{list_erc20_transfers, list_eth_transfers};
+use crate::notifications::notify_of_deposit;
 
 static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
 static DEPOSIT_ANTI_FRONTRUN_DURATION_SECONDS: i64 = 3;
@@ -30,6 +34,7 @@ async fn commit_deposit_to_user_balance(
     pool: &PgPool,
     deposit_requests: Vec<DepositRequest>,
     new_deposit: &NewDeposit,
+    teloxide_bot: &Bot,
 ) -> anyhow::Result<bool> {
     let non_cex_deposit_addresses = deposit_requests
         .into_iter()
@@ -63,6 +68,23 @@ async fn commit_deposit_to_user_balance(
                 new_deposit.amount.clone(),
             )
             .await?;
+
+            let user_id = User::get_user_by_address(
+                pool,
+                non_cex_deposit_addresses[0].depositor_public_key.clone(),
+            )
+            .await?
+            .map(|user| user.telegram_id)
+            .unwrap_or_default();
+
+            notify_of_deposit(
+                teloxide_bot,
+                user_id,
+                new_deposit.amount.clone(),
+                new_deposit.asset.clone(),
+            )
+            .await?;
+
             return Ok(true);
         }
         _ => {
@@ -80,6 +102,7 @@ async fn commit_deposit_to_user_balance(
 
 async fn match_deposits_to_user_deposit_requests(
     pool: &PgPool,
+    teloxide_bot: &Bot,
     new_deposit: NewDeposit,
 ) -> anyhow::Result<()> {
     let start_time = new_deposit.created_at
@@ -98,7 +121,8 @@ async fn match_deposits_to_user_deposit_requests(
     )
     .await?;
 
-    let early_exit = commit_deposit_to_user_balance(pool, deposit_addresses, &new_deposit).await?;
+    let early_exit =
+        commit_deposit_to_user_balance(pool, deposit_addresses, &new_deposit, teloxide_bot).await?;
 
     if early_exit {
         return Ok(());
@@ -112,7 +136,7 @@ async fn match_deposits_to_user_deposit_requests(
         end_time,
     )
     .await?;
-    commit_deposit_to_user_balance(pool, deposit_requests, &new_deposit).await?;
+    commit_deposit_to_user_balance(pool, deposit_requests, &new_deposit, teloxide_bot).await?;
 
     Ok(())
 }
@@ -121,6 +145,7 @@ async fn fetch_new_eth_deposits(
     pool: &mut PgPool,
     client: &Client,
     config: &Config,
+    teloxide_bot: &Bot,
 ) -> anyhow::Result<()> {
     let mut next_token: Option<String> = None;
     let mut all_eth_transfer_ids: Vec<String> = Vec::new();
@@ -157,7 +182,7 @@ async fn fetch_new_eth_deposits(
         Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
 
         for new_deposit in new_deposits {
-            match_deposits_to_user_deposit_requests(pool, new_deposit).await?;
+            match_deposits_to_user_deposit_requests(pool, teloxide_bot, new_deposit).await?;
         }
 
         next_token = Some(eth_transfer_response.link.next_token);
@@ -175,6 +200,7 @@ async fn fetch_new_erc20_deposits(
     pool: &mut PgPool,
     client: &Client,
     config: &Config,
+    teloxide_bot: &Bot,
 ) -> anyhow::Result<()> {
     let mut next_token: Option<String> = None;
     let mut all_erc20_transfer_ids: Vec<String> = Vec::new();
@@ -217,7 +243,7 @@ async fn fetch_new_erc20_deposits(
         Deposit::insert_bulk_deposits(pool, new_deposits.clone()).await?;
 
         for new_deposit in new_deposits {
-            match_deposits_to_user_deposit_requests(pool, new_deposit).await?;
+            match_deposits_to_user_deposit_requests(pool, teloxide_bot, new_deposit).await?;
         }
 
         next_token = Some(erc20_transfer_response.link.next_token);
@@ -239,11 +265,13 @@ async fn main() -> anyhow::Result<()> {
 
     let mut pool = PgPool::connect(&config.database_url).await?;
 
+    let teloxide_bot = Bot::new(config.teloxide_token.clone());
+
     loop {
         // get all eth transfers
-        fetch_new_eth_deposits(&mut pool, &client, &config).await?;
+        fetch_new_eth_deposits(&mut pool, &client, &config, &teloxide_bot).await?;
 
         // get all erc20 transfers
-        fetch_new_erc20_deposits(&mut pool, &client, &config).await?;
+        fetch_new_erc20_deposits(&mut pool, &client, &config, &teloxide_bot).await?;
     }
 }

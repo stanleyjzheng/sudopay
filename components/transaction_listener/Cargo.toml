@@ -20,3 +20,4 @@ config = { path = "../config" }
 sqlx = { workpace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+teloxide = { workspace = true }

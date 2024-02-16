@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   salted_password TEXT DEFAULT NULL,
   seed_phrase TEXT NOT NULL,
   seed_phrase_public_key TEXT NOT NULL,
+  onboarded BOOLEAN NOT NULL,
+  telegram_tag TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
