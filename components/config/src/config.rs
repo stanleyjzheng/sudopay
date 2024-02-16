@@ -8,6 +8,7 @@ pub struct Config {
     pub transferrer_private_key: String,
     pub contract_address: String,
     pub http_rpc_url: String,
+    pub mainnet_http_rpc_url: String,
     pub chain_id: u64,
 }
 
@@ -27,12 +28,14 @@ impl Config {
             .expect("CHAIN_ID")
             .parse::<u64>()
             .expect("CHAIN_ID must be a number");
+        let mainnet_http_rpc_url = env::var("MAINNET_HTTP_RPC_URL").expect("MAINNET_HTTP_RPC_URL");
 
         Config {
             database_url,
             teloxide_token,
             transferrer_private_key,
             contract_address,
+            mainnet_http_rpc_url,
             http_rpc_url,
             chain_id,
         }

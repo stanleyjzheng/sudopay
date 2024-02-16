@@ -66,6 +66,7 @@ async fn commit_deposit_to_user_balance(
                 pool,
                 &non_cex_deposit_addresses[0].depositor_public_key,
                 new_deposit.amount.clone(),
+                &non_cex_deposit_addresses[0].asset,
             )
             .await?;
 

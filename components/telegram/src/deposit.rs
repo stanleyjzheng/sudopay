@@ -34,7 +34,7 @@ pub async fn click_choose_deposit_coin(bot: Bot, dialogue: MyDialogue) -> anyhow
 
     bot.send_message(
         dialogue.chat_id(),
-        "What asset will you be depositing? Any other tokens sent to this address will be lost.",
+        "What asset will you be depositing\\? Any other tokens sent to this address will be lost\\.",
     )
     .reply_markup(InlineKeyboardMarkup::new([deposit_assets]))
     .await?;
@@ -43,7 +43,7 @@ pub async fn click_choose_deposit_coin(bot: Bot, dialogue: MyDialogue) -> anyhow
 }
 
 pub async fn input_deposit_address(bot: Bot, dialogue: MyDialogue) -> anyhow::Result<()> {
-    bot.send_message(dialogue.chat_id(), "Please enter your deposit address.")
+    bot.send_message(dialogue.chat_id(), "Please enter your deposit address\\.")
         .await?;
 
     dialogue.update(State::AwaitingDepositAddress).await?;
@@ -52,7 +52,7 @@ pub async fn input_deposit_address(bot: Bot, dialogue: MyDialogue) -> anyhow::Re
 }
 
 pub async fn input_deposit_amount(bot: Bot, dialogue: MyDialogue) -> anyhow::Result<()> {
-    bot.send_message(dialogue.chat_id(), "Please enter your deposit amount.")
+    bot.send_message(dialogue.chat_id(), "Please enter your deposit amount\\.")
         .await?;
 
     dialogue.update(State::AwaitingDepositAmount).await?;
@@ -70,7 +70,7 @@ pub async fn receive_deposit_address(
             let deposit_address = match H160::from_str(&deposit_address) {
                 Ok(deposit_address) => deposit_address,
                 Err(_) => {
-                    bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it.")
+                    bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it\\.")
                         .await?;
                     return Ok(());
                 }
@@ -85,7 +85,7 @@ pub async fn receive_deposit_address(
             click_choose_deposit_coin(bot, dialogue).await?;
         }
         None => {
-            bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it.")
+            bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it\\.")
                 .await?;
         }
     }
@@ -103,7 +103,7 @@ pub async fn receive_deposit_amount(
             let deposit_amount = match BigDecimal::from_str(&deposit_amount) {
                 Ok(deposit_amount) => deposit_amount,
                 Err(_) => {
-                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it.")
+                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it\\.")
                         .await?;
                     return Ok(());
                 }
@@ -118,7 +118,7 @@ pub async fn receive_deposit_amount(
         None => {
             bot.send_message(
                 msg.chat.id,
-                "Could not parse amount; verify that it's a valid number, then re-enter it.",
+                "Could not parse amount; verify that it's a valid number, then re-enter it\\.",
             )
             .await?;
         }
@@ -151,17 +151,17 @@ pub async fn receive_deposit_coin_by_amount(
     dialogue: MyDialogue,
     q: CallbackQuery,
     amount: BigDecimal,
-    pool: &PgPool,
+    pool: PgPool,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
             Ok(asset) => {
-                let user = match User::get_user(pool, dialogue.chat_id().0).await? {
+                let user = match User::get_user(&pool, dialogue.chat_id().0).await? {
                     Some(u) => u,
                     None => {
                         bot.send_message(
                             dialogue.chat_id(),
-                            "You are not registered. Please register with /start.",
+                            "You are not registered. Please register with /start\\.",
                         )
                         .await?;
                         dialogue.exit().await?;
@@ -169,8 +169,10 @@ pub async fn receive_deposit_coin_by_amount(
                     }
                 };
 
+                log::debug!("User: {:?} is creating a deposit by coin", user);
+
                 DepositRequest::new(
-                    pool,
+                    &pool,
                     user.seed_phrase_public_key,
                     asset.clone(),
                     Some(amount.clone()),
@@ -201,12 +203,12 @@ pub async fn receive_deposit_coin_by_address(
     dialogue: MyDialogue,
     q: CallbackQuery,
     address: H160,
-    pool: &PgPool,
+    pool: PgPool,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
             Ok(asset) => {
-                let user = match User::get_user(pool, dialogue.chat_id().0).await? {
+                let user = match User::get_user(&pool, dialogue.chat_id().0).await? {
                     Some(u) => u,
                     None => {
                         bot.send_message(
@@ -219,8 +221,10 @@ pub async fn receive_deposit_coin_by_address(
                     }
                 };
 
+                log::debug!("User: {:?} is creating a deposit by address", user);
+
                 DepositRequest::new(
-                    pool,
+                    &pool,
                     user.seed_phrase_public_key,
                     asset.clone(),
                     None,

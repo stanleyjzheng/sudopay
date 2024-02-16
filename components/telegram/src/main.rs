@@ -1,4 +1,5 @@
 mod deposit;
+mod send;
 mod start;
 mod types;
 mod utils;
@@ -10,6 +11,7 @@ use deposit::{
     click_deposit_address_or_deposit_amount, receive_deposit_address, receive_deposit_amount,
     receive_deposit_coin_by_address, receive_deposit_coin_by_amount, receive_deposit_type,
 };
+use ethers::providers::{Http, Provider};
 use log::info;
 use price::PriceClient;
 use sqlx::PgPool;
@@ -29,15 +31,23 @@ async fn main() {
     let config = Config::new_from_env();
     let bot = Bot::new(config.teloxide_token.clone());
 
+    // let pool = Arc::new(Mutex::new(
+    //     PgPool::connect(&config.database_url).await.unwrap(),
+    // ));
+
     let pool = PgPool::connect(&config.database_url).await.unwrap();
+
     let price_client = Arc::new(Mutex::new(
-        PriceClient::new(Some(config), Some(pool.clone()))
-            .await
-            .unwrap(),
+        PriceClient::new(Some(config.clone()), None).await.unwrap(),
+    ));
+
+    let mainnet_provider = Arc::new(Mutex::new(
+        Provider::<Http>::try_from(config.mainnet_http_rpc_url).unwrap(),
     ));
 
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![
+            mainnet_provider,
             pool,
             price_client,
             InMemStorage::<State>::new()

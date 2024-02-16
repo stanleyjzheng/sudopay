@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS transactions (
 -- Deposit requests
 CREATE TABLE IF NOT EXISTS deposit_requests (
   id SERIAL PRIMARY KEY NOT NULL,
-  telegram_id BIGINT NOT NULL,
   depositor_public_key TEXT NOT NULL,
   asset TEXT NOT NULL,
   unit_amount NUMERIC DEFAULT NULL,

@@ -3830,6 +3830,7 @@ dependencies = [
  "sqlx",
  "teloxide",
  "tokio",
+ "transaction_sender",
 ]
 
 [[package]]
@@ -4227,8 +4228,10 @@ dependencies = [
  "anyhow",
  "common",
  "config",
+ "db",
  "ethers",
  "serde_json",
+ "sqlx",
  "tokio",
 ]
 

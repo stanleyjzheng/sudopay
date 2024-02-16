@@ -17,3 +17,4 @@ common = { path = "../common" }
 db = { path = "../db" }
 num-traits = "0.2.18"
 teloxide = { workspace = true }
+transaction_sender = { path = "../transaction_sender" }

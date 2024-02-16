@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
+use common::types::SudoPayAsset;
 use once_cell::sync::Lazy;
 use sqlx::{query, query_as, types::BigDecimal, PgPool};
 
@@ -58,38 +59,74 @@ impl Balance {
         pool: &PgPool,
         seed_phrase_public_key: &str,
         amount: BigDecimal,
+        asset: &SudoPayAsset,
     ) -> anyhow::Result<()> {
-        query!(
-            "UPDATE balances SET eth_balance = eth_balance + $1 WHERE seed_phrase_public_key = $2",
-            amount,
-            seed_phrase_public_key
-        )
-        .execute(pool)
-        .await?;
+        match asset.to_owned() {
+            SudoPayAsset::Eth | SudoPayAsset::Weth => {
+                query!(
+                    "UPDATE balances SET eth_balance = eth_balance + $1 WHERE seed_phrase_public_key = $2",
+                    amount,
+                    seed_phrase_public_key
+                )
+                .execute(pool)
+                .await?;
+            }
+            SudoPayAsset::Usdb => {
+                query!(
+                    "UPDATE balances SET usdb_balance = usdb_balance + $1 WHERE seed_phrase_public_key = $2",
+                    amount,
+                    seed_phrase_public_key
+                )
+                .execute(pool)
+                .await?;
+            }
+        }
 
         // Update accrued yield after balance change
-        Self::update_accrued_yield(pool, seed_phrase_public_key).await
+        Self::update_accrued_yield(pool, seed_phrase_public_key).await?;
+
+        Ok(())
     }
 
     pub async fn subtract_from_balance(
         pool: &PgPool,
         seed_phrase_public_key: &str,
         amount: BigDecimal,
+        asset: &SudoPayAsset,
     ) -> anyhow::Result<()> {
-        let result = query!(
-        "UPDATE balances SET eth_balance = eth_balance - $1 WHERE seed_phrase_public_key = $2 AND eth_balance >= $1",
-        amount,
-        seed_phrase_public_key
-    )
-    .execute(pool)
-    .await?;
+        match asset.to_owned() {
+            SudoPayAsset::Eth | SudoPayAsset::Weth => {
+                let result = query!(
+                    "UPDATE balances SET eth_balance = eth_balance - $1 WHERE seed_phrase_public_key = $2",
+                    amount,
+                    seed_phrase_public_key
+                )
+                .execute(pool)
+                .await?;
 
-        if result.rows_affected() == 0 {
-            return Err(anyhow!("Balance row not found"));
+                if result.rows_affected() == 0 {
+                    return Err(anyhow!("Balance row not found"));
+                }
+            }
+            SudoPayAsset::Usdb => {
+                let result = query!(
+                    "UPDATE balances SET usdb_balance = usdb_balance - $1 WHERE seed_phrase_public_key = $2",
+                    amount,
+                    seed_phrase_public_key
+                )
+                .execute(pool)
+                .await?;
+
+                if result.rows_affected() == 0 {
+                    return Err(anyhow!("Balance row not found"));
+                }
+            }
         }
 
         // Update accrued yield after balance change
-        Self::update_accrued_yield(pool, seed_phrase_public_key).await
+        Self::update_accrued_yield(pool, seed_phrase_public_key).await?;
+
+        Ok(())
     }
 
     pub async fn get_by_seed_phrase_public_key(

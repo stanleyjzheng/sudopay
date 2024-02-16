@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use ethers::types::U256;
+use ethers::types::{H160, U256};
 use once_cell::sync::Lazy;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
@@ -30,10 +30,14 @@ pub fn asset_to_decimals(asset: &SudoPayAsset) -> u64 {
     }
 }
 
-pub fn asset_to_address(asset: &SudoPayAsset) -> Option<String> {
+pub fn asset_to_address(asset: &SudoPayAsset) -> Option<H160> {
     match asset.to_owned() {
-        SudoPayAsset::Weth => Some("0x4200000000000000000000000000000000000023".to_string()),
-        SudoPayAsset::Usdb => Some("0x4200000000000000000000000000000000000022".to_string()),
+        SudoPayAsset::Weth => {
+            Some(H160::from_str("0x4200000000000000000000000000000000000023").unwrap())
+        }
+        SudoPayAsset::Usdb => {
+            Some(H160::from_str("0x4200000000000000000000000000000000000022").unwrap())
+        }
         SudoPayAsset::Eth => None,
     }
 }
@@ -72,4 +76,16 @@ pub fn u256_to_big_decimal(value: U256) -> BigDecimal {
 
     // theoretically this should never panic since U256 < BigDecimal::Max()
     BigDecimal::from_str(&value_str).unwrap()
+}
+
+pub fn make_telegram_markdown_parser_happy(message: String) -> String {
+    // telegram's markdown parser is the bane of my existence.
+
+    message
+        .replace('.', "\\.")
+        .replace(')', "\\)")
+        .replace('(', "\\(")
+        .replace('!', "\\!")
+        // we escape the brackets we need for the link, so we replace it here
+        .replace("TWITTER_LINK_HERE", "[twitter](https://x.com/sudolabel)")
 }

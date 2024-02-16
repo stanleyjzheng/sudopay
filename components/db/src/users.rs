@@ -6,6 +6,7 @@ use ethers::signers::{
 };
 use sqlx::{query, query_as, PgPool};
 
+#[derive(Debug, sqlx::FromRow)]
 pub struct User {
     pub telegram_id: i64,
     pub salted_password: Option<String>,
