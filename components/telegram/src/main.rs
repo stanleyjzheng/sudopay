@@ -23,6 +23,11 @@ use teloxide::{
 use tokio::sync::Mutex;
 use types::{Command, State};
 
+use crate::send::{
+    input_send_address, receive_send_address, receive_send_amount, receive_send_asset_type,
+    receive_verify_deposit,
+};
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -31,22 +36,17 @@ async fn main() {
     let config = Config::new_from_env();
     let bot = Bot::new(config.teloxide_token.clone());
 
-    // let pool = Arc::new(Mutex::new(
-    //     PgPool::connect(&config.database_url).await.unwrap(),
-    // ));
-
     let pool = PgPool::connect(&config.database_url).await.unwrap();
 
     let price_client = Arc::new(Mutex::new(
         PriceClient::new(Some(config.clone()), None).await.unwrap(),
     ));
 
-    let mainnet_provider = Arc::new(Mutex::new(
-        Provider::<Http>::try_from(config.mainnet_http_rpc_url).unwrap(),
-    ));
+    let mainnet_provider = Provider::<Http>::try_from(config.mainnet_http_rpc_url.clone()).unwrap();
 
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![
+            config,
             mainnet_provider,
             pool,
             price_client,
@@ -66,7 +66,8 @@ fn schema() -> UpdateHandler<anyhow::Error> {
             case![State::Start]
                 .branch(case![Command::Help].endpoint(help))
                 .branch(case![Command::Start].endpoint(start)) // .branch(case![Command::Cancel].endpoint(cancel)),
-                .branch(case![Command::Deposit].endpoint(click_deposit_address_or_deposit_amount)),
+                .branch(case![Command::Deposit].endpoint(click_deposit_address_or_deposit_amount))
+                .branch(case![Command::Send].endpoint(input_send_address)),
         )
         .branch(case![Command::Cancel].endpoint(cancel));
 
@@ -79,12 +80,32 @@ fn schema() -> UpdateHandler<anyhow::Error> {
         .branch(
             case![State::UserInputtedDepositAmount { deposit_amount }]
                 .endpoint(receive_deposit_coin_by_amount),
+        )
+        .branch(
+            case![State::UserInputtedSendAddress { address_or_handle }]
+                .endpoint(receive_send_asset_type),
+        )
+        .branch(
+            case![State::UserInputtedAssetAddressAndAmount {
+                amount,
+                asset,
+                address_or_handle
+            }]
+            .endpoint(receive_verify_deposit),
         );
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
         .branch(case![State::AwaitingDepositAddress].endpoint(receive_deposit_address))
         .branch(case![State::AwaitingDepositAmount].endpoint(receive_deposit_amount))
+        .branch(case![State::AwaitingSendAddress].endpoint(receive_send_address))
+        .branch(
+            case![State::AwaitingSendAmount {
+                address_or_handle,
+                asset
+            }]
+            .endpoint(receive_send_amount),
+        )
         .branch(dptree::endpoint(invalid_state));
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()

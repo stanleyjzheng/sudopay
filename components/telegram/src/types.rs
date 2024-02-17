@@ -1,3 +1,4 @@
+use common::types::SudoPayAsset;
 use ethers::types::H160;
 use sqlx::types::BigDecimal;
 use teloxide::{
@@ -18,6 +19,24 @@ pub enum State {
     },
     UserInputtedDepositAmount {
         deposit_amount: BigDecimal,
+    },
+    // Send
+    AwaitingSendAddress,
+    UserInputtedSendAddress {
+        address_or_handle: String,
+    },
+    UserInputtedAssetAndAddress {
+        asset: SudoPayAsset,
+        address_or_handle: String,
+    },
+    AwaitingSendAmount {
+        asset: SudoPayAsset,
+        address_or_handle: String,
+    },
+    UserInputtedAssetAddressAndAmount {
+        asset: SudoPayAsset,
+        amount: f64,
+        address_or_handle: String,
     },
 }
 
@@ -53,6 +72,8 @@ pub enum Command {
     ListDeposits,
     /// List all withdrawals
     ListWithdrawals,
+    /// Send
+    Send,
 }
 
 pub type MyDialogue = Dialogue<State, InMemStorage<State>>;

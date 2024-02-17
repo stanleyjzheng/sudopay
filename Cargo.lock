@@ -3825,6 +3825,7 @@ dependencies = [
  "ethers",
  "log",
  "num-traits",
+ "once_cell",
  "pretty_env_logger",
  "price",
  "sqlx",

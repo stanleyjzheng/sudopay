@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, ops::Div, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use ethers::types::{H160, U256};
@@ -87,5 +87,16 @@ pub fn make_telegram_markdown_parser_happy(message: String) -> String {
         .replace('(', "\\(")
         .replace('!', "\\!")
         // we escape the brackets we need for the link, so we replace it here
-        .replace("TWITTER_LINK_HERE", "[twitter](https://x.com/sudolabel)")
+        .replace(
+            "TWITTER_LINK_HERE",
+            "[follow us on twitter](https://x.com/sudolabel)",
+        )
+}
+
+pub fn get_unit_amount(asset: &SudoPayAsset, amount: BigDecimal) -> BigDecimal {
+    let decimals = asset_to_decimals(asset);
+
+    let scale = 10_u64.pow(decimals as u32);
+
+    amount.div(BigDecimal::from(scale))
 }

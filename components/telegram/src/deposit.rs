@@ -34,7 +34,7 @@ pub async fn click_choose_deposit_coin(bot: Bot, dialogue: MyDialogue) -> anyhow
 
     bot.send_message(
         dialogue.chat_id(),
-        "What asset will you be depositing\\? Any other tokens sent to this address will be lost\\.",
+        "What asset will you be depositing? Any other tokens sent to this address will be lost.",
     )
     .reply_markup(InlineKeyboardMarkup::new([deposit_assets]))
     .await?;
@@ -43,7 +43,7 @@ pub async fn click_choose_deposit_coin(bot: Bot, dialogue: MyDialogue) -> anyhow
 }
 
 pub async fn input_deposit_address(bot: Bot, dialogue: MyDialogue) -> anyhow::Result<()> {
-    bot.send_message(dialogue.chat_id(), "Please enter your deposit address\\.")
+    bot.send_message(dialogue.chat_id(), "Please enter your deposit address.")
         .await?;
 
     dialogue.update(State::AwaitingDepositAddress).await?;
@@ -52,7 +52,7 @@ pub async fn input_deposit_address(bot: Bot, dialogue: MyDialogue) -> anyhow::Re
 }
 
 pub async fn input_deposit_amount(bot: Bot, dialogue: MyDialogue) -> anyhow::Result<()> {
-    bot.send_message(dialogue.chat_id(), "Please enter your deposit amount\\.")
+    bot.send_message(dialogue.chat_id(), "Please enter your deposit amount.")
         .await?;
 
     dialogue.update(State::AwaitingDepositAmount).await?;

@@ -4,7 +4,7 @@ mod notifications;
 use chrono::Utc;
 use common::{
     types::SudoPayAsset,
-    utils::{u256_to_big_decimal, TOKEN_ADDRESS_TO_ASSET},
+    utils::{get_unit_amount, u256_to_big_decimal, TOKEN_ADDRESS_TO_ASSET},
 };
 use config::Config;
 use db::{
@@ -22,8 +22,8 @@ use tokio::time::{sleep, Duration};
 use crate::blastscan::{list_erc20_transfers, list_eth_transfers};
 use crate::notifications::notify_of_deposit;
 
-// static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
-static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 86400 * 5;
+static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 180;
+// static DEPOSIT_REQUEST_DURATION_SECONDS: i64 = 86400 * 5;
 static DEPOSIT_ANTI_FRONTRUN_DURATION_SECONDS: i64 = 3;
 
 // TODO: CEX withdrawal addresses upon mainnet, or an automated process to pull wallet labels
@@ -79,10 +79,12 @@ async fn commit_deposit_to_user_balance(
             .map(|user| user.telegram_id)
             .unwrap_or_default();
 
+            let unit_amount = get_unit_amount(&new_deposit.asset, new_deposit.amount.clone());
+
             notify_of_deposit(
                 teloxide_bot,
                 user_id,
-                new_deposit.amount.clone(),
+                unit_amount,
                 new_deposit.asset.clone(),
             )
             .await?;
