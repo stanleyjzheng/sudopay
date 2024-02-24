@@ -10,6 +10,8 @@ use teloxide::{
 pub enum State {
     #[default]
     Start,
+    // Menu options
+    UserClickedMenu,
     // Deposits
     AwaitingDepositAddress,
     AwaitingDepositAmount,

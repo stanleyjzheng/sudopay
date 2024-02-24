@@ -1,25 +1,30 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
-use crate::types::{MyDialogue, State};
+use crate::{
+    start,
+    types::{MyDialogue, State},
+};
 
 use common::types::SudoPayAsset;
+use config::Config;
 use db::{deposits::DepositRequest, users::User};
 use ethers::types::H160;
+use price::PriceClient;
 use sqlx::{types::BigDecimal, PgPool};
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
+use tokio::sync::Mutex;
 
 pub async fn click_deposit_address_or_deposit_amount(
     bot: Bot,
     dialogue: MyDialogue,
-    msg: Message,
 ) -> anyhow::Result<()> {
     let deposit_methods = ["Specify deposit address", "Specify deposit amount"]
         .map(|product| InlineKeyboardButton::callback(product, product));
 
-    bot.send_message(msg.chat.id, "Would you like to specify the address you are depositing from (more secure, if you are depositing from a known wallet), or the exact amount of your deposit (if you are depositing from an exchange).")
+    bot.send_message(dialogue.chat_id(), "Would you like to specify the address you are depositing from (more secure, if you are depositing from a known wallet), or the exact amount of your deposit (if you are depositing from an exchange).")
         .reply_markup(InlineKeyboardMarkup::new([deposit_methods]))
         .await?;
 
@@ -70,7 +75,7 @@ pub async fn receive_deposit_address(
             let deposit_address = match H160::from_str(&deposit_address) {
                 Ok(deposit_address) => deposit_address,
                 Err(_) => {
-                    bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it\\.")
+                    bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it.")
                         .await?;
                     return Ok(());
                 }
@@ -85,7 +90,7 @@ pub async fn receive_deposit_address(
             click_choose_deposit_coin(bot, dialogue).await?;
         }
         None => {
-            bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it\\.")
+            bot.send_message(msg.chat.id, "Could not parse deposit address; verify that it's a valid deposit address, then re-enter it.")
                 .await?;
         }
     }
@@ -103,7 +108,7 @@ pub async fn receive_deposit_amount(
             let deposit_amount = match BigDecimal::from_str(&deposit_amount) {
                 Ok(deposit_amount) => deposit_amount,
                 Err(_) => {
-                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it\\.")
+                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it.")
                         .await?;
                     return Ok(());
                 }
@@ -118,7 +123,7 @@ pub async fn receive_deposit_amount(
         None => {
             bot.send_message(
                 msg.chat.id,
-                "Could not parse amount; verify that it's a valid number, then re-enter it\\.",
+                "Could not parse amount; verify that it's a valid number, then re-enter it.",
             )
             .await?;
         }
@@ -152,6 +157,7 @@ pub async fn receive_deposit_coin_by_amount(
     q: CallbackQuery,
     amount: BigDecimal,
     pool: PgPool,
+    config: Config,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
@@ -161,7 +167,7 @@ pub async fn receive_deposit_coin_by_amount(
                     None => {
                         bot.send_message(
                             dialogue.chat_id(),
-                            "You are not registered. Please register with /start\\.",
+                            "You are not registered. Please register with /start.",
                         )
                         .await?;
                         dialogue.exit().await?;
@@ -185,7 +191,7 @@ pub async fn receive_deposit_coin_by_amount(
 
                 bot.send_message(
                     dialogue.chat_id(),
-                    format!("You have created a deposit request for {} {:?}. This deposit request expires in an hour; please create a new deposit request past this time. Be sure to deposit the exact amount specified.", amount, asset),
+                    format!("You have created a deposit request for {} {:?}. Send your funds to {} This deposit request expires in an hour; please create a new deposit request past this time. Be sure to deposit the exact amount specified.", amount, asset, config.contract_address),
                 ).reply_markup(InlineKeyboardMarkup::new([return_to_main_menu])).await?;
             }
             Err(_) => {
@@ -201,9 +207,11 @@ pub async fn receive_deposit_coin_by_amount(
 pub async fn receive_deposit_coin_by_address(
     bot: Bot,
     dialogue: MyDialogue,
+    price_client: Arc<Mutex<PriceClient>>,
     q: CallbackQuery,
     address: H160,
     pool: PgPool,
+    config: Config,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(deposit_type) => match deposit_type.parse::<SudoPayAsset>() {
@@ -237,8 +245,10 @@ pub async fn receive_deposit_coin_by_address(
 
                 bot.send_message(
                     dialogue.chat_id(),
-                    format!("You have created a deposit request for {} from your address {:#?}. This deposit request expires in 3 minutes; please create a new deposit request past this time.", address, asset),
+                    format!("You have created a deposit request for {} from your address {:#?}. Please send your assets to {}. This deposit request expires in 3 minutes; please create a new deposit request past this time.", address, asset, config.contract_address),
                 ).reply_markup(InlineKeyboardMarkup::new([return_to_main_menu])).await?;
+
+                start(bot, dialogue, price_client, pool).await?;
             }
             Err(_) => {
                 dialogue.exit().await?;

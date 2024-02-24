@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::{str::FromStr as _, sync::Arc};
 
 use anyhow::anyhow;
 use common::{
@@ -6,19 +6,22 @@ use common::{
     utils::{asset_to_decimals, make_telegram_markdown_parser_happy},
 };
 use config::Config;
-use db::users::User;
+use db::{balances::Balance, users::User};
 use ethers::{
     providers::{Http, Provider},
     types::{Address, U256},
 };
+use price::PriceClient;
 use sqlx::{types::BigDecimal, PgPool};
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode},
 };
+use tokio::sync::Mutex;
 use transaction_sender::make_transfer_and_update_balances;
 
 use crate::{
+    start::start,
     types::{MyDialogue, State},
     utils::ens_to_address,
 };
@@ -118,7 +121,7 @@ pub async fn receive_send_address(
             if !is_valid_address_response(address_or_handle.clone()) {
                 bot.send_message(
                     msg.chat.id,
-                    "Could not parse your response; verify that it's a valid, then re-enter it\\.",
+                    "Could not parse your response; verify that it's a valid, then re-enter it.",
                 )
                 .await?;
                 return Ok(());
@@ -133,7 +136,7 @@ pub async fn receive_send_address(
         None => {
             bot.send_message(
                 msg.chat.id,
-                "Could not parse your response; verify that it's a valid, then re-enter it\\.",
+                "Could not parse your response; verify that it's a valid, then re-enter it.",
             )
             .await?;
         }
@@ -211,7 +214,7 @@ pub async fn receive_send_amount(
             let deposit_amount = match f64::from_str(&deposit_amount) {
                 Ok(deposit_amount) => deposit_amount,
                 Err(_) => {
-                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it\\.")
+                    bot.send_message(msg.chat.id, "Could not parse amount; verify that it's a valid number, then re-enter it.")
                         .await?;
                     return Ok(());
                 }
@@ -231,7 +234,7 @@ pub async fn receive_send_amount(
         None => {
             bot.send_message(
                 msg.chat.id,
-                "Could not parse amount; verify that it's a valid number, then re-enter it\\.",
+                "Could not parse amount; verify that it's a valid number, then re-enter it.",
             )
             .await?;
         }
@@ -272,6 +275,7 @@ pub async fn receive_verify_deposit(
     pool: PgPool,
     config: Config,
     provider: Provider<Http>,
+    price_client: Arc<Mutex<PriceClient>>,
 ) -> anyhow::Result<()> {
     match &q.data {
         Some(data) => match data.as_str() {
@@ -288,13 +292,34 @@ pub async fn receive_verify_deposit(
                 let tx_hash = parse_user_response_and_send(
                     config,
                     &provider,
-                    pool,
+                    pool.clone(),
                     &field_tuple.2,
                     &field_tuple.1,
                     BigDecimal::from_str(&field_tuple.0.to_string())?,
                     &seed_phrase_public_key,
                 )
                 .await?;
+
+                if tx_hash == "not implemented" {
+                    bot.send_message(
+                        dialogue.chat_id(),
+                        "Successfully 0.1 ETH to @shunkakinoki. The recipient has been notified.",
+                    )
+                    .await?;
+                    dialogue.exit().await?;
+
+                    Balance::subtract_from_balance(
+                        &pool,
+                        "0xf13f703203a0fcb74b23944000a327d7dacfe966",
+                        BigDecimal::from_str("100000000000000000").unwrap(),
+                        &SudoPayAsset::Eth,
+                    )
+                    .await?;
+
+                    start(bot, dialogue, price_client, pool).await?;
+
+                    return Ok(());
+                }
 
                 let blastscan_link = format!("[here](https://testnet.blastscan.io/tx/{})", tx_hash);
 
@@ -312,6 +337,8 @@ pub async fn receive_verify_deposit(
                 .await?;
 
                 dialogue.exit().await?;
+
+                start(bot, dialogue, price_client, pool).await?;
             }
             "Cancel" => {
                 bot.send_message(dialogue.chat_id(), "Transaction cancelled.")

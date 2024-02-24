@@ -44,7 +44,12 @@ async fn commit_deposit_to_user_balance(
         })
         .collect::<Vec<DepositRequest>>();
 
-    let unique_depositing_addresses = non_cex_deposit_addresses
+    let non_filled_deposit_requests = non_cex_deposit_addresses
+        .iter()
+        .filter(|deposit| deposit.matched_transaction_id.is_none())
+        .collect::<Vec<&DepositRequest>>();
+
+    let unique_depositing_addresses = non_filled_deposit_requests
         .iter()
         .map(|deposit| deposit.depositor_public_key.clone())
         .unique()
@@ -158,6 +163,12 @@ async fn fetch_new_eth_deposits(
 
     loop {
         let eth_transfer_response = list_eth_transfers(client, next_token.clone(), config).await?;
+
+        // Blastscan minimum req/s limit is 1, so we sleep for 500ms after each request. probably fine for now since we won't be hitting
+        // 100 eth/erc20 deposits/s for a while. Or probably ever.
+        // TODO: Exponential backoff instead of sleep
+        sleep(Duration::from_millis(1000)).await;
+
         let current_page_ids = eth_transfer_response
             .items
             .iter()
@@ -223,6 +234,12 @@ async fn fetch_new_erc20_deposits(
     loop {
         let erc20_transfer_response =
             list_erc20_transfers(client, next_token.clone(), config).await?;
+
+        // Blastscan minimum req/s limit is 1, so we sleep for 500ms after each request. probably fine for now since we won't be hitting
+        // 100 eth/erc20 deposits/s for a while. Or probably ever.
+        // TODO: Exponential backoff instead of sleep
+        sleep(Duration::from_millis(1000)).await;
+
         let current_page_ids = erc20_transfer_response
             .items
             .iter()
@@ -271,11 +288,6 @@ async fn fetch_new_erc20_deposits(
                 break;
             }
         }
-
-        // Blastscan minimum req/s is 1, so we sleep for 1s after each request. probably fine for now since we won't be hitting
-        // 100 eth/erc20 deposits/s for a while. Or probably ever.
-        // TODO: Exponential backoff instead of sleep
-        sleep(Duration::from_secs(1)).await;
     }
 
     Ok(())

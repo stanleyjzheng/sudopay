@@ -23,9 +23,12 @@ use teloxide::{
 use tokio::sync::Mutex;
 use types::{Command, State};
 
-use crate::send::{
-    input_send_address, receive_send_address, receive_send_amount, receive_send_asset_type,
-    receive_verify_deposit,
+use crate::{
+    send::{
+        input_send_address, receive_send_address, receive_send_amount, receive_send_asset_type,
+        receive_verify_deposit,
+    },
+    start::handle_menu_click,
 };
 
 #[tokio::main]
@@ -62,13 +65,10 @@ fn schema() -> UpdateHandler<anyhow::Error> {
     use dptree::case;
 
     let command_handler = teloxide::filter_command::<Command, _>()
-        .branch(
-            case![State::Start]
-                .branch(case![Command::Help].endpoint(help))
-                .branch(case![Command::Start].endpoint(start)) // .branch(case![Command::Cancel].endpoint(cancel)),
-                .branch(case![Command::Deposit].endpoint(click_deposit_address_or_deposit_amount))
-                .branch(case![Command::Send].endpoint(input_send_address)),
-        )
+        .branch(case![Command::Help].endpoint(help))
+        .branch(case![Command::Start].endpoint(start)) // .branch(case![Command::Cancel].endpoint(cancel)),
+        .branch(case![Command::Deposit].endpoint(click_deposit_address_or_deposit_amount))
+        .branch(case![Command::Send].endpoint(input_send_address))
         .branch(case![Command::Cancel].endpoint(cancel));
 
     let callback_query_handler = Update::filter_callback_query()
@@ -92,7 +92,8 @@ fn schema() -> UpdateHandler<anyhow::Error> {
                 address_or_handle
             }]
             .endpoint(receive_verify_deposit),
-        );
+        )
+        .branch(case![State::UserClickedMenu].endpoint(handle_menu_click));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)

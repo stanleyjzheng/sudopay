@@ -171,4 +171,19 @@ impl User {
 
         Ok(())
     }
+
+    pub async fn set_onboarded(pool: &PgPool, user_id: i64) -> anyhow::Result<()> {
+        query!(
+            "
+            UPDATE users
+            SET onboarded = true
+            WHERE telegram_id = $1;
+            ",
+            user_id,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
 }
